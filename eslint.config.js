@@ -14,4 +14,13 @@ export default tseslint.config(
       sourceType: "module",
     },
   },
+  {
+    // Plain JS build scripts run under Node — give them Node globals so no-undef passes.
+    files: ["**/*.mjs", "scripts/**"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: { console: "readonly", process: "readonly", URL: "readonly" },
+    },
+  },
 );

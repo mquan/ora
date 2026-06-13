@@ -1,10 +1,152 @@
 /**
- * Shared types for gregorian.
+ * Shared domain types for gregorian.
  *
- * Placeholder — the domain model (Event, Run, EngineKind, lifecycle states, etc.)
- * is defined by the store-schema task (2026-06-12-230002). Keep this file valid,
- * non-empty ESM until then.
+ * Row interfaces mirror the SQLite columns in `snake_case` so the store, daemon,
+ * watcher, and web API all speak the same shapes with no mapping layer. The schema
+ * is locked in the design doc §"SQLite schema (M1)".
  */
 
-/** Package version marker. The real version is sourced from package.json at build/release time. */
+/** Package marker. The real version is sourced from package.json at build/release time. */
 export const GREGORIAN = "gregorian" as const;
+
+/** Agent engines gregorian can launch and record. */
+export type EngineKind = "claude" | "codex";
+
+/**
+ * A run's purpose. `run` is a user-facing agent run the watcher records; `summarizer`
+ * is gregorian's own `claude -p` minutes pass, which the watcher skips (self-ingestion guard).
+ */
+export type RunRole = "run" | "summarizer";
+
+/** `once` = a concrete scheduled occurrence; `adhoc` = a run discovered after the fact. */
+export type ScheduleKind = "once" | "adhoc";
+
+/** Lifecycle of a scheduled/recorded event. A scheduled fire must never silently vanish. */
+export type EventStatus = "scheduled" | "running" | "done" | "failed" | "missed";
+
+/** Lifecycle of a single run. */
+export type RunStatus = "running" | "done" | "failed";
+
+/**
+ * A scheduled template that spawns occurrences. Each occurrence is materialized as its own
+ * one-off `event`. Null for one-off / ad-hoc events.
+ */
+export interface RecurrenceRule {
+  id: string;
+  cron_spec: string;
+  engine: EngineKind;
+  model: string | null;
+  cwd: string;
+  prompt: string;
+  /** Skill/doc references; persisted as a JSON array. */
+  mentions: string[] | null;
+  created_at: string;
+}
+
+/** A scheduled or discovered unit of work on the timeline. */
+export interface Event {
+  id: string;
+  title: string;
+  engine: EngineKind;
+  model: string | null;
+  cwd: string;
+  /** Null for pure ad-hoc (discovered) events. */
+  prompt: string | null;
+  /** Skill/doc references; persisted as a JSON array. */
+  mentions: string[] | null;
+  schedule_kind: ScheduleKind;
+  /** Concrete ISO time for `once`; null for `adhoc`. */
+  scheduled_at: string | null;
+  recurrence_rule_id: string | null;
+  status: EventStatus;
+  created_at: string;
+}
+
+/** A single execution of an event, correlated to a transcript by `session_id`. */
+export interface Run {
+  id: string;
+  event_id: string;
+  engine: EngineKind;
+  /** The join key — pre-assigned for claude. Unique across all runs (watcher dedup). */
+  session_id: string;
+  role: RunRole;
+  transcript_path: string | null;
+  /** Bytes of the transcript already ingested — for dedup / re-attach after restart. */
+  transcript_offset: number;
+  started_at: string | null;
+  ended_at: string | null;
+  exit_code: number | null;
+  /** Git diff summary; null for ad-hoc (no before-snapshot). */
+  diff_stat: string | null;
+  minutes: string | null;
+  status: RunStatus;
+}
+
+/**
+ * Creation inputs. Store-generated fields (`id`, `created_at`) and fields with sane defaults
+ * are optional; everything else is required.
+ */
+export type NewRecurrenceRule = Omit<RecurrenceRule, "id" | "created_at" | "model" | "mentions"> &
+  Partial<Pick<RecurrenceRule, "id" | "created_at" | "model" | "mentions">>;
+
+export type NewEvent = Omit<
+  Event,
+  "id" | "created_at" | "model" | "prompt" | "mentions" | "scheduled_at" | "recurrence_rule_id"
+> &
+  Partial<
+    Pick<
+      Event,
+      "id" | "created_at" | "model" | "prompt" | "mentions" | "scheduled_at" | "recurrence_rule_id"
+    >
+  >;
+
+export type NewRun = Omit<
+  Run,
+  | "id"
+  | "transcript_offset"
+  | "transcript_path"
+  | "started_at"
+  | "ended_at"
+  | "exit_code"
+  | "diff_stat"
+  | "minutes"
+> &
+  Partial<
+    Pick<
+      Run,
+      | "id"
+      | "transcript_offset"
+      | "transcript_path"
+      | "started_at"
+      | "ended_at"
+      | "exit_code"
+      | "diff_stat"
+      | "minutes"
+    >
+  >;
+
+/** Patchable fields on an existing run (status transitions, recording results). */
+export type RunUpdate = Partial<
+  Pick<
+    Run,
+    | "status"
+    | "role"
+    | "transcript_path"
+    | "transcript_offset"
+    | "started_at"
+    | "ended_at"
+    | "exit_code"
+    | "diff_stat"
+    | "minutes"
+  >
+>;
+
+/** Patchable fields on an existing event. */
+export type EventUpdate = Partial<
+  Pick<Event, "status" | "title" | "scheduled_at" | "model" | "prompt" | "mentions">
+>;
+
+/** Optional filter for `listEvents`. */
+export interface EventFilter {
+  status?: EventStatus;
+}

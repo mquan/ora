@@ -1,0 +1,14 @@
+node_modules/
+dist/
+
+# SQLite store (better-sqlite3 WAL mode)
+*.db
+*.db-wal
+*.db-shm
+
+# Worktrees (one per active task)
+.worktrees/
+
+# OS / editor
+.DS_Store
+*.log

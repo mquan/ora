@@ -15,7 +15,7 @@
  * exported, and unit-tested in isolation.
  */
 
-import { createReadStream } from "node:fs";
+import { createReadStream, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -39,11 +39,27 @@ export const MAX_TOOL_TEXT = 2000;
  * Empirically confirmed (NOT from docs): `/Users/quan/workspace/maneuver/.worktrees/x` →
  * `-Users-quan-workspace-maneuver--worktrees-x`. The `/.worktrees` segment becomes `--worktrees`
  * (a double dash), proving BOTH `/` and `.` collapse to `-` — a naive `/`→`-` would have left
- * `-.worktrees`. `resolve()` first so a relative `event.cwd` still maps to the absolute slug claude
- * actually uses. This is the most failure-prone line in the adapter → exported for isolated testing.
+ * `-.worktrees`. This is the most failure-prone line in the adapter → exported for isolated testing.
  */
 export function slugForCwd(cwd: string): string {
-  return resolve(cwd).replace(/[^a-zA-Z0-9]/g, "-");
+  return canonicalCwd(cwd).replace(/[^a-zA-Z0-9]/g, "-");
+}
+
+/**
+ * Resolve `cwd` to the SAME absolute path claude names its transcript dir after. claude slugifies the
+ * process's *real* working directory — and the OS resolves symlinks on `chdir` — so we must `realpath`,
+ * not just `resolve`. The classic macOS trap: `/tmp` is a symlink to `/private/tmp`, so a run launched
+ * in `/tmp/x` actually writes to `…/-private-tmp-x`, NOT `…/-tmp-x`; a lexical `resolve` predicts the
+ * wrong path and the watcher (m2) never finds the transcript. `realpathSync` requires the directory to
+ * exist — it does at launch time, the only moment the slug must be right — so if it can't resolve (path
+ * not yet created, e.g. a pure prediction call), fall back to lexical `resolve` rather than throw.
+ */
+function canonicalCwd(cwd: string): string {
+  try {
+    return realpathSync(resolve(cwd));
+  } catch {
+    return resolve(cwd);
+  }
 }
 
 /**

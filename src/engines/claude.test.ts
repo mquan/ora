@@ -6,7 +6,7 @@
  * join key end-to-end against the REAL base with zero network/auth.
  */
 
-import { mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, existsSync, symlinkSync, realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -65,7 +65,23 @@ describe("slugForCwd — the correctness spine", () => {
   });
 
   it("maps a plain absolute path, collapsing every separator to a dash", () => {
-    expect(slugForCwd("/tmp/greg-test")).toBe("-tmp-greg-test");
+    // A path that does not exist on disk → realpath can't resolve it → deterministic lexical slug.
+    expect(slugForCwd("/no-such-root-xyz/greg-test")).toBe("-no-such-root-xyz-greg-test");
+  });
+
+  it("resolves symlinks like claude does (the /tmp → /private/tmp trap)", () => {
+    // claude slugs the REAL working directory, so a symlinked cwd must slug to its target, not the link.
+    const real = mkdtempSync(join(tmpdir(), "greg-real-"));
+    const link = join(tmpdir(), `greg-link-${Date.now()}`);
+    symlinkSync(real, link);
+    try {
+      // slugForCwd(link) must equal the slug of the resolved real path — NOT a slug of the link path.
+      expect(slugForCwd(link)).toBe(realpathSync(real).replace(/[^a-zA-Z0-9]/g, "-"));
+      expect(slugForCwd(link)).toBe(slugForCwd(real));
+    } finally {
+      rmSync(link, { force: true });
+      rmSync(real, { recursive: true, force: true });
+    }
   });
 
   it("resolves a relative path to absolute before slugging", () => {
@@ -81,8 +97,11 @@ describe("slugForCwd — the correctness spine", () => {
 describe("resolveTranscriptPath", () => {
   it("composes <root>/<slug>/<sessionId>.jsonl under ~/.claude/projects", () => {
     const engine = new ClaudeEngine();
-    const p = engine.resolveTranscriptPath("sess-123", "/tmp/greg-test");
-    expect(p).toBe(join(homedir(), ".claude", "projects", "-tmp-greg-test", "sess-123.jsonl"));
+    // Non-existent cwd → slug falls back to the lexical path, keeping this assertion FS-independent.
+    const p = engine.resolveTranscriptPath("sess-123", "/no-such-root-xyz/greg-test");
+    expect(p).toBe(
+      join(homedir(), ".claude", "projects", "-no-such-root-xyz-greg-test", "sess-123.jsonl"),
+    );
   });
 
   it("roots transcripts under homedir/.claude/projects", () => {

@@ -23,7 +23,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Store } from "../store/store.js";
 import { Scheduler, type Logger } from "./scheduler.js";
 import { Daemon } from "./daemon.js";
-import type { AgentEngine, RunHandle, RunResult, StartOptions, TranscriptEvent } from "../engines/types.js";
+import type {
+  AgentEngine,
+  RunHandle,
+  RunResult,
+  StartOptions,
+  TranscriptEvent,
+  TranscriptIdentity,
+} from "../engines/types.js";
 import type { Event, NewEvent } from "../types.js";
 
 /** Silence the daemon/scheduler logs so test output stays clean; tests assert on state, not logs. */
@@ -56,6 +63,11 @@ class StubEngine implements AgentEngine {
 
   transcriptRoots(): string[] {
     return ["/tmp/stub-transcripts"];
+  }
+
+  identifyTranscript(): TranscriptIdentity | null {
+    // unused by the scheduler; present to satisfy the AgentEngine contract.
+    return null;
   }
 }
 

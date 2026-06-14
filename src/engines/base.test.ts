@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { AgentAdapterBase, ChildRunHandle, captureGitSnapshot, gitDiffStat } from "./base.js";
-import type { SpawnSpec, TranscriptEvent } from "./types.js";
+import type { SpawnSpec, TranscriptEvent, TranscriptIdentity } from "./types.js";
 import type { Event } from "../types.js";
 
 function git(cwd: string, ...args: string[]): string {
@@ -62,6 +62,11 @@ class TestAdapter extends AgentAdapterBase {
 
   transcriptRoots(): string[] {
     return ["/tmp"];
+  }
+
+  // Exercised in t4 (claude adapter); a stub keeps the base test focused on spawn + snapshot.
+  identifyTranscript(): TranscriptIdentity | null {
+    return null;
   }
 }
 

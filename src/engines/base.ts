@@ -23,6 +23,7 @@ import type {
   SpawnSpec,
   StartOptions,
   TranscriptEvent,
+  TranscriptIdentity,
 } from "./types.js";
 
 const execFileAsync = promisify(execFile);
@@ -175,6 +176,9 @@ export abstract class AgentAdapterBase implements AgentEngine {
   abstract parseTranscript(path: string): AsyncIterable<TranscriptEvent>;
 
   abstract transcriptRoots(): string[];
+
+  /** Inverse of {@link resolveTranscriptPath}: a transcript path → its run identity, or `null` if not ours. */
+  abstract identifyTranscript(path: string): TranscriptIdentity | null;
 
   async start(event: Event, opts: StartOptions): Promise<RunHandle> {
     const snapshot = opts.beforeSnapshot ? await captureGitSnapshot(event.cwd) : null;

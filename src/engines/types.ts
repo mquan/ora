@@ -38,6 +38,34 @@ export interface AgentEngine {
    * e.g. claude → `~/.claude/projects`, codex → `~/.codex/sessions`.
    */
   transcriptRoots(): string[];
+
+  /**
+   * The INVERSE of {@link AgentEngine.start}'s path knowledge: given a file path observed under one
+   * of this engine's {@link transcriptRoots}, recover the run's identity. Returns `null` ONLY when
+   * `path` is not this engine's transcript at all (wrong dir, wrong extension) — so the watcher can
+   * ignore unrelated files without baking any engine's on-disk convention into itself. This is what
+   * lets the watcher DISCOVER ad-hoc sessions (ones gregorian never launched) engine-agnostically;
+   * codex (m3) drops in by implementing it. Synchronous + best-effort: `sessionId` is always cheaply
+   * derivable from the path, while `cwd` is read from the file's own content and may be `null` on a
+   * freshly-created/partially-flushed transcript (see {@link TranscriptIdentity}).
+   */
+  identifyTranscript(path: string): TranscriptIdentity | null;
+}
+
+/**
+ * What {@link AgentEngine.identifyTranscript} recovers from a transcript path — the inverse of the
+ * `(sessionId, cwd) → path` mapping the launch side uses.
+ */
+export interface TranscriptIdentity {
+  /** The run correlation key — for claude, the transcript filename stem. Always resolvable. */
+  sessionId: string;
+  /**
+   * The run's working directory, read from the transcript's own content. `null` when the file is too
+   * fresh to carry it yet (no complete `cwd`-bearing line flushed). Consumers re-attaching an existing
+   * run proceed regardless (the run row already has its cwd); ad-hoc DISCOVERY defers until a later
+   * event carries a non-null cwd, since cwd is required to create the event.
+   */
+  cwd: string | null;
 }
 
 /** Inputs to {@link AgentEngine.start}. */

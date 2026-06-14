@@ -6,13 +6,28 @@
  * join key end-to-end against the REAL base with zero network/auth.
  */
 
-import { mkdtempSync, writeFileSync, rmSync, existsSync, symlinkSync, realpathSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+  symlinkSync,
+  realpathSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { ClaudeEngine, slugForCwd, composePrompt, mapLine, MAX_TOOL_TEXT } from "./claude.js";
+import {
+  ClaudeEngine,
+  slugForCwd,
+  composePrompt,
+  mapLine,
+  readTranscriptCwd,
+  MAX_TOOL_TEXT,
+} from "./claude.js";
 import type { SpawnSpec, TranscriptEvent } from "./types.js";
 import type { Event } from "../types.js";
 
@@ -286,5 +301,93 @@ describe("DoD — predicted-path integration (mock spawn, no live claude)", () =
     expect(events.length).toBeGreaterThanOrEqual(1);
     expect(events[0]!.type).toBe("message");
     expect(events[0]!.text).toBe("hi from the predicted path");
+  });
+});
+
+describe("readTranscriptCwd — authoritative cwd from transcript content", () => {
+  function writeRaw(content: string): string {
+    const dir = mkdtempSync(join(tmpdir(), "greg-cwd-read-"));
+    tmpPaths.push(dir);
+    const file = join(dir, "t.jsonl");
+    writeFileSync(file, content);
+    return file;
+  }
+
+  it("returns the cwd from the first cwd-bearing complete line", () => {
+    const file = writeRaw(
+      [
+        JSON.stringify({ type: "system", subtype: "init" }),
+        JSON.stringify({ type: "user", cwd: "/Users/me/repo", message: { content: "hi" } }),
+      ].join("\n") + "\n",
+    );
+    expect(readTranscriptCwd(file)).toBe("/Users/me/repo");
+  });
+
+  it("returns null when no line carries a cwd yet", () => {
+    const file = writeRaw(JSON.stringify({ type: "system", subtype: "init" }) + "\n");
+    expect(readTranscriptCwd(file)).toBeNull();
+  });
+
+  it("returns null for a missing file (consumer races claude's first write)", () => {
+    expect(readTranscriptCwd("/no/such/greg-missing.jsonl")).toBeNull();
+  });
+
+  it("ignores a trailing half-written line (no newline) — defers rather than parsing a partial", () => {
+    // The only cwd is on an unterminated final line → treated as not-yet-flushed → null.
+    const file = writeRaw(
+      JSON.stringify({ type: "system", subtype: "init" }) +
+        "\n" +
+        '{"type":"user","cwd":"/half/written","message":{"content":"par',
+    );
+    expect(readTranscriptCwd(file)).toBeNull();
+  });
+
+  it("still finds a cwd on an earlier COMPLETE line when a later line is partial", () => {
+    const file = writeRaw(
+      JSON.stringify({ type: "user", cwd: "/good/cwd", message: { content: "hi" } }) +
+        "\n" +
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"par',
+    );
+    expect(readTranscriptCwd(file)).toBe("/good/cwd");
+  });
+});
+
+describe("identifyTranscript — inverse of resolveTranscriptPath", () => {
+  const projectsRoot = join(homedir(), ".claude", "projects");
+
+  /** Write a transcript under a temp slug dir inside the REAL projects root (cleaned up after). */
+  function writeUnderProjects(sessionId: string, lines: object[]): string {
+    mkdirSync(projectsRoot, { recursive: true }); // the root may not exist on a fresh machine/CI
+    const dir = mkdtempSync(join(projectsRoot, "greg-test-"));
+    tmpPaths.push(dir);
+    const file = join(dir, `${sessionId}.jsonl`);
+    writeFileSync(file, lines.map((l) => JSON.stringify(l)).join("\n") + (lines.length ? "\n" : ""));
+    return file;
+  }
+
+  it("returns null for a path outside ~/.claude/projects", () => {
+    expect(new ClaudeEngine().identifyTranscript("/tmp/elsewhere/abc.jsonl")).toBeNull();
+  });
+
+  it("returns null for a non-.jsonl file under the projects root", () => {
+    expect(new ClaudeEngine().identifyTranscript(join(projectsRoot, "slug", "notes.txt"))).toBeNull();
+  });
+
+  it("recovers sessionId from the filename stem and cwd from the content", () => {
+    const file = writeUnderProjects("sess-abc", [
+      { type: "user", cwd: "/work/project", message: { content: "hi" } },
+    ]);
+    expect(new ClaudeEngine().identifyTranscript(file)).toEqual({
+      sessionId: "sess-abc",
+      cwd: "/work/project",
+    });
+  });
+
+  it("returns sessionId with cwd:null when the transcript has no cwd line yet", () => {
+    const file = writeUnderProjects("sess-fresh", [{ type: "system", subtype: "init" }]);
+    expect(new ClaudeEngine().identifyTranscript(file)).toEqual({
+      sessionId: "sess-fresh",
+      cwd: null,
+    });
   });
 });

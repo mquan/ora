@@ -15,13 +15,13 @@
  * exported, and unit-tested in isolation.
  */
 
-import { createReadStream, realpathSync } from "node:fs";
+import { closeSync, createReadStream, openSync, readSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 
 import { AgentAdapterBase } from "./base.js";
-import type { SpawnSpec, TranscriptEvent } from "./types.js";
+import type { SpawnSpec, TranscriptEvent, TranscriptIdentity } from "./types.js";
 import type { Event } from "../types.js";
 
 /**
@@ -31,6 +31,59 @@ import type { Event } from "../types.js";
  * bound is visible and tunable rather than a magic literal.
  */
 export const MAX_TOOL_TEXT = 2000;
+
+/**
+ * How far into a transcript {@link readTranscriptCwd} will scan for the first `cwd`-bearing line.
+ * claude writes a `cwd` field on (essentially) every line, so the first complete line carries it and
+ * 64 KiB is generous headroom — bounding the read keeps `identifyTranscript` O(1) regardless of how
+ * large the transcript grows, and crash-proof on a half-written first line (we just defer).
+ */
+export const MAX_CWD_SCAN_BYTES = 64 * 1024;
+
+/**
+ * Read the run's working directory out of a claude transcript's own content — authoritative, unlike
+ * de-slugging the directory name (`slugForCwd` is lossy: `/` and `.` both collapse to `-`, so it has
+ * no inverse). Scans at most {@link MAX_CWD_SCAN_BYTES} synchronously, parses only COMPLETE newline-
+ * terminated lines (a trailing partial line — a live half-written flush — is ignored), and returns the
+ * first non-empty `cwd` string found. Returns `null` for a missing/empty/too-fresh file or any read
+ * error; never throws. Exported for isolated unit testing, mirroring {@link slugForCwd}.
+ */
+export function readTranscriptCwd(path: string): string | null {
+  let fd: number | undefined;
+  try {
+    fd = openSync(path, "r");
+    const buf = Buffer.alloc(MAX_CWD_SCAN_BYTES);
+    const bytesRead = readSync(fd, buf, 0, buf.length, 0);
+    const text = buf.toString("utf8", 0, bytesRead);
+    const lines = text.split("\n");
+    // Drop the last element unless the chunk ended on a newline — it is a partial (possibly mid-write)
+    // line we must not parse. (`split` always yields a trailing "" when text ends in "\n", so dropping
+    // it then is a no-op.)
+    lines.pop();
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) continue;
+      try {
+        const obj = JSON.parse(trimmed) as Record<string, unknown>;
+        if (typeof obj.cwd === "string" && obj.cwd.length > 0) return obj.cwd;
+      } catch {
+        // A non-JSON / malformed line is not fatal — keep scanning the rest of the bounded window.
+      }
+    }
+    return null;
+  } catch {
+    // ENOENT (consumer raced claude's first write), permission, etc. → "no cwd yet", never a throw.
+    return null;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        // best-effort close
+      }
+    }
+  }
+}
 
 /**
  * Encode a cwd the way claude names its on-disk transcript directory: every non-alphanumeric
@@ -213,6 +266,19 @@ export class ClaudeEngine extends AgentAdapterBase {
    */
   resolveTranscriptPath(sessionId: string, cwd: string): string {
     return join(this.projectsRoot(), slugForCwd(cwd), `${sessionId}.jsonl`);
+  }
+
+  /**
+   * Inverse of {@link resolveTranscriptPath}. Returns `null` when `path` is not one of claude's
+   * transcripts (not under `~/.claude/projects`, or not a `*.jsonl`), so the watcher ignores it.
+   * Otherwise `sessionId` is the filename stem (the same key the launch side pre-assigns — no read
+   * needed) and `cwd` is read from the file's content via {@link readTranscriptCwd}, which may be
+   * `null` on a transcript too fresh to have flushed a `cwd` line yet (ad-hoc discovery then defers).
+   */
+  identifyTranscript(path: string): TranscriptIdentity | null {
+    const root = this.projectsRoot();
+    if (!path.startsWith(root + sep) || !path.endsWith(".jsonl")) return null;
+    return { sessionId: basename(path, ".jsonl"), cwd: readTranscriptCwd(path) };
   }
 
   /**

@@ -224,6 +224,15 @@ describe("Daemon HTTP API", () => {
     expect(base.startsWith("http://127.0.0.1:")).toBe(true);
   });
 
+  it("GET / is a 200 unauthenticated landing page (not a bare 401)", async () => {
+    const res = await fetch(`${base}/`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { name: string; status: string; routes: string[] };
+    expect(body.name).toBe("gregorian");
+    expect(body.status).toBe("ok");
+    expect(body.routes).toContain("GET /health");
+  });
+
   it("rejects authed routes without a valid bearer token", async () => {
     const missing = await fetch(`${base}/events`);
     expect(missing.status).toBe(401);

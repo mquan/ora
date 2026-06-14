@@ -188,6 +188,19 @@ async function handle(
     return;
   }
 
+  // Friendly, unauthenticated landing at the root so a browser sees the daemon is alive (rather than
+  // a bare 401). It's a JSON API today; the web UI lands in m5. No secrets here — just orientation.
+  if (pathname === "/" && method === "GET") {
+    sendJson(res, 200, {
+      name: "gregorian",
+      status: "ok",
+      message: "gregorian daemon is running. This is a JSON API; the web UI ships in a later milestone.",
+      hint: "Use the CLI: `gregorian add …` and `gregorian list`. Authed routes need a bearer token.",
+      routes: ["GET /health", "GET /events", "POST /events", "GET /runs"],
+    });
+    return;
+  }
+
   const provided = bearer(req);
   if (provided === null || !tokensMatch(provided, token)) {
     sendJson(res, 401, { error: "unauthorized", message: "missing or invalid bearer token" });

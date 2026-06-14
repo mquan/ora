@@ -72,6 +72,19 @@ function bearer(req: IncomingMessage): string | null {
  */
 function readBody(req: IncomingMessage, res: ServerResponse): Promise<string | null> {
   return new Promise((resolve) => {
+    // Fast path: a declared Content-Length over the cap is rejected before reading a byte. Drain the
+    // socket (`resume`) so the connection closes cleanly and the 413 reaches the client.
+    const declared = Number(req.headers["content-length"] ?? "0");
+    if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+      sendJson(res, 413, {
+        error: "payload_too_large",
+        message: `request body exceeds ${MAX_BODY_BYTES} bytes`,
+      });
+      req.resume();
+      resolve(null);
+      return;
+    }
+
     let size = 0;
     const chunks: Buffer[] = [];
     let done = false;

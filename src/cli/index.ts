@@ -49,7 +49,7 @@ async function main(argv: string[]): Promise<number> {
     case "add":
       return addCommand(rest);
     case "list":
-      return listCommand(rest);
+      return listCommand();
     case "daemon":
       return daemonCommand(rest);
     default:

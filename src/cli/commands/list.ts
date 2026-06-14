@@ -45,7 +45,7 @@ function renderTable(events: Event[], runsByEvent: Map<string, Run[]>): string {
   return [line(header), ...rows.map(line)].join("\n");
 }
 
-export async function listCommand(_args: string[]): Promise<number> {
+export async function listCommand(): Promise<number> {
   let events: Event[];
   let runs: Run[];
   try {

@@ -274,6 +274,26 @@ export class Store {
     return this.getRun(id);
   }
 
+  /**
+   * All runs, oldest-started first (`started_at` is set at creation in the launch path). Powers the
+   * daemon's `GET /runs` and the CLI `list` view. `id` is the tiebreaker for a stable order when two
+   * runs share a timestamp or `started_at` is null.
+   */
+  listRuns(): Run[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM run ORDER BY started_at, id`)
+      .all() as RunRow[];
+    return rows.map((r) => this.mapRun(r));
+  }
+
+  /** Runs for a single event, oldest-started first. */
+  listRunsByEvent(eventId: string): Run[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM run WHERE event_id = ? ORDER BY started_at, id`)
+      .all(eventId) as RunRow[];
+    return rows.map((r) => this.mapRun(r));
+  }
+
   // --- mappers / helpers ---
 
   private mapRule(row: RecurrenceRuleRow): RecurrenceRule {

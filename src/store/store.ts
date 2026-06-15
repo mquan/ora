@@ -35,7 +35,17 @@ const SCHEMA_SQL = readFileSync(new URL("./schema.sql", import.meta.url), "utf8"
  * Ordered migrations. `user_version` records how many have been applied; on open we run any
  * that are pending, each in its own transaction. v1 is the initial schema. Append, never edit.
  */
-const MIGRATIONS: ReadonlyArray<(db: DB) => void> = [(db) => db.exec(SCHEMA_SQL)];
+const MIGRATIONS: ReadonlyArray<(db: DB) => void> = [
+  // v1 — initial schema (the human-readable `schema.sql` snapshot).
+  (db) => db.exec(SCHEMA_SQL),
+  // v2 — record WHY a run failed (m2-finding B) + index recurrence-occurrence lookups
+  // (materializeRecurrences queries event.recurrence_rule_id on every boot + tick). `schema.sql`
+  // stays frozen as the v1 snapshot per the append-never-edit convention above.
+  (db) => {
+    db.exec("ALTER TABLE run ADD COLUMN error TEXT");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_event_recurrence ON event(recurrence_rule_id)");
+  },
+];
 
 /** A scalar value that can be bound to a SQLite statement parameter. */
 type Bind = string | number | null;
@@ -82,6 +92,7 @@ interface RunRow {
   diff_stat: string | null;
   minutes: string | null;
   status: string;
+  error: string | null;
 }
 
 function parseMentions(raw: string | null): string[] | null {
@@ -210,6 +221,17 @@ export class Store {
     return rows.map((r) => this.mapEvent(r));
   }
 
+  /**
+   * Every event materialized from a recurrence rule, oldest occurrence first. Backs idempotent
+   * re-materialization (skip occurrences already present) — see `daemon/recurrence.ts`.
+   */
+  listEventsByRule(ruleId: string): Event[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM event WHERE recurrence_rule_id = ? ORDER BY scheduled_at`)
+      .all(ruleId) as EventRow[];
+    return rows.map((r) => this.mapEvent(r));
+  }
+
   /** Apply a partial update and return the refreshed row (or `undefined` if `id` is unknown). */
   updateEvent(id: string, patch: EventUpdate): Event | undefined {
     const bind = this.buildPatch(patch, ["mentions"]);
@@ -238,15 +260,16 @@ export class Store {
       diff_stat: input.diff_stat ?? null,
       minutes: input.minutes ?? null,
       status: input.status,
+      error: input.error ?? null,
     };
     this.db
       .prepare(
         `INSERT INTO run
            (id, event_id, engine, session_id, role, transcript_path, transcript_offset,
-            started_at, ended_at, exit_code, diff_stat, minutes, status)
+            started_at, ended_at, exit_code, diff_stat, minutes, status, error)
          VALUES
            (@id, @event_id, @engine, @session_id, @role, @transcript_path, @transcript_offset,
-            @started_at, @ended_at, @exit_code, @diff_stat, @minutes, @status)`,
+            @started_at, @ended_at, @exit_code, @diff_stat, @minutes, @status, @error)`,
       )
       .run(run);
     return run;

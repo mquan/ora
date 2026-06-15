@@ -28,6 +28,14 @@ export interface AgentEngine {
   start(event: Event, opts: StartOptions): Promise<RunHandle>;
 
   /**
+   * Where this engine will write the transcript for `sessionId` launched in `cwd`, or `null` if not
+   * predictable. The forward map the launch side uses; reconcile + the minutes pass call it to locate
+   * a launched run's transcript when the run row has no `transcript_path` yet (daemon crashed before
+   * the watcher attached). Pure path construction — the file may not exist yet.
+   */
+  resolveTranscriptPath(sessionId: string, cwd: string): string | null;
+
+  /**
    * Map this engine's transcript JSONL into the unified {@link TranscriptEvent} stream the
    * minutes pass (m2) consumes. Async-iterable so huge transcripts stream rather than load whole.
    */

@@ -78,6 +78,12 @@ export interface WatcherDeps {
   idleMs?: number;
   /** ISO-timestamp source (`started_at`/`ended_at`); defaults to wall clock. Injectable for tests. */
   now?: () => string;
+  /**
+   * Optional hook invoked when the watcher finalizes a run to `done` (the real transition only — not a
+   * liveness re-arm, terminal/summarizer skip, or vanished-file deferral). The daemon wires this to the
+   * minutes service (R1); the watcher stays decoupled — it just calls an injected callback.
+   */
+  onFinalize?: (run: Run) => void;
 }
 
 /** The two chokidar events that carry transcript growth. `unlink` is handled separately. */
@@ -89,6 +95,7 @@ export class Watcher {
   private readonly logger: Logger;
   private readonly idleMs: number;
   private readonly now: () => string;
+  private readonly onFinalize?: (run: Run) => void;
 
   /** One armed idle timer per live session; reset on every observed write, cleared on finalize/stop. */
   private readonly idleTimers = new Map<string, NodeJS.Timeout>();
@@ -100,6 +107,7 @@ export class Watcher {
     this.logger = deps.logger ?? consoleLogger;
     this.idleMs = deps.idleMs ?? DEFAULT_IDLE_MS;
     this.now = deps.now ?? (() => new Date().toISOString());
+    this.onFinalize = deps.onFinalize;
   }
 
   /**
@@ -301,6 +309,20 @@ export class Watcher {
       });
       this.store.updateEvent(run.event_id, { status: "done" });
       this.logger.log(`finalized run ${run.id} (session ${sessionId}) → done at offset ${Math.max(run.transcript_offset, size)}`);
+
+      // R1: a run reaching a terminal state on the watcher path triggers minutes. Pass the refreshed
+      // row (with transcript_path/offset) so the minutes service can locate the transcript. Guarded so
+      // a hook throw can never tear down the watcher.
+      if (this.onFinalize) {
+        const finalized = this.store.getRun(run.id);
+        if (finalized) {
+          try {
+            this.onFinalize(finalized);
+          } catch (err) {
+            this.logger.error(`onFinalize hook failed for run ${run.id}: ${(err as Error).message}`);
+          }
+        }
+      }
     } catch (err) {
       this.logger.error(`finalize failed for ${sessionId}: ${(err as Error).message}`);
     }

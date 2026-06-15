@@ -22,6 +22,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import { timingSafeEqual } from "node:crypto";
+import { statSync } from "node:fs";
 
 import type { Store } from "../store/store.js";
 import type { EngineKind } from "../types.js";
@@ -145,6 +146,19 @@ function parseAddRequest(raw: string): AddEventRequest | { error: string } {
   };
 }
 
+/**
+ * R6: validate the run's `cwd` at the authoritative trust boundary. Reject a schedule that is
+ * guaranteed to fail at fire time (the engine spawn would ENOENT). Best-effort `stat` — a missing
+ * path or non-directory is rejected; a transient stat error is treated as "not a directory".
+ */
+function isExistingDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 /** Derive a title from the prompt's first line, or a fallback. */
 function titleFor(req: AddEventRequest): string {
   if (req.title && req.title.trim().length > 0) return req.title.trim();
@@ -215,6 +229,13 @@ async function handle(
       sendJson(res, 400, { error: "bad_request", message: parsed.error });
       return;
     }
+    if (!isExistingDirectory(parsed.cwd)) {
+      sendJson(res, 400, {
+        error: "bad_request",
+        message: `cwd does not exist or is not a directory: ${parsed.cwd}`,
+      });
+      return;
+    }
     const event = store.createEvent({
       title: titleFor(parsed),
       engine: parsed.engine,
@@ -233,6 +254,18 @@ async function handle(
 
   if (method === "GET" && pathname === "/events") {
     sendJson(res, 200, { events: store.listEvents() });
+    return;
+  }
+
+  // Detail view for one event + its runs — powers `gregorian show` and the m5 web UI (same shape).
+  if (method === "GET" && pathname.startsWith("/events/")) {
+    const id = decodeURIComponent(pathname.slice("/events/".length));
+    const event = store.getEvent(id);
+    if (!event) {
+      sendJson(res, 404, { error: "not_found", message: `no event ${id}` });
+      return;
+    }
+    sendJson(res, 200, { event, runs: store.listRunsByEvent(id) });
     return;
   }
 

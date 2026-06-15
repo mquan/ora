@@ -80,6 +80,12 @@ export interface Run {
   diff_stat: string | null;
   minutes: string | null;
   status: RunStatus;
+  /**
+   * Named, human-readable reason the run failed (spawn/finalize/interrupted) — null when the run
+   * did not fail. A failed run is never a cause-less dead end (m2-finding B); surfaced in
+   * `gregorian list` (short) and `gregorian show` (full). Added by migration v2.
+   */
+  error: string | null;
 }
 
 /**
@@ -110,6 +116,7 @@ export type NewRun = Omit<
   | "exit_code"
   | "diff_stat"
   | "minutes"
+  | "error"
 > &
   Partial<
     Pick<
@@ -122,6 +129,7 @@ export type NewRun = Omit<
       | "exit_code"
       | "diff_stat"
       | "minutes"
+      | "error"
     >
   >;
 
@@ -138,6 +146,7 @@ export type RunUpdate = Partial<
     | "exit_code"
     | "diff_stat"
     | "minutes"
+    | "error"
   >
 >;
 

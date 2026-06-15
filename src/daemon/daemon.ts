@@ -18,10 +18,19 @@ import { Store } from "../store/store.js";
 import {
   Scheduler,
   consoleLogger,
+  defaultEngineResolver,
   type EngineResolver,
   type Logger,
 } from "./scheduler.js";
 import { createServer } from "./server.js";
+import { Watcher } from "../watcher/watcher.js";
+import { MinutesService } from "./minutes.js";
+import { reconcile } from "./reconcile.js";
+import { materializeRecurrences } from "./recurrence.js";
+import { ClaudeEngine } from "../engines/claude.js";
+import type { AgentEngine } from "../engines/types.js";
+import type { ClaudeRunner } from "../minutes/summarizer.js";
+import type { Run } from "../types.js";
 import {
   dbPath,
   ensureHome,
@@ -33,6 +42,9 @@ import {
 
 /** Default loopback port; override via `GREGORIAN_PORT` or {@link DaemonOptions.port}. */
 export const DEFAULT_PORT = 4773;
+
+/** Default period between recurrence re-materialization ticks (rolling-window refresh). */
+export const DEFAULT_RECURRENCE_INTERVAL_MS = 60 * 60 * 1000;
 
 /** Thrown when the configured port is already bound — likely another gregorian daemon. */
 export class PortInUseError extends Error {
@@ -54,36 +66,100 @@ export interface DaemonOptions {
   /** Port to bind. `0` picks an ephemeral port (used in tests). Defaults to env/`DEFAULT_PORT`. */
   port?: number;
   logger?: Logger;
-  /** Override the engine resolver (tests inject a stub so no real `claude` is spawned). */
+  /** Override the engine resolver the scheduler launches with (tests inject a stub — no real `claude`). */
   engineResolver?: EngineResolver;
+  /** Engines whose transcript roots the watcher subscribes to. Defaults to `[new ClaudeEngine()]`. */
+  engines?: AgentEngine[];
+  /** Watcher idle window (ms). Defaults to the watcher's own default (60s). */
+  idleMs?: number;
+  /** Override the minutes summarizer's `claude -p` spawn (tests inject a deterministic stub). */
+  summarizerRunner?: ClaudeRunner;
+  /** Missed-fire grace window (ms). Defaults to reconcile's `DEFAULT_GRACE_MS` (1h). */
+  graceMs?: number;
+  /** Period between recurrence re-materialization ticks (ms). Defaults to {@link DEFAULT_RECURRENCE_INTERVAL_MS}. */
+  recurrenceIntervalMs?: number;
 }
 
 export class Daemon {
   private store?: Store;
   private scheduler?: Scheduler;
+  private watcher?: Watcher;
   private server?: Server;
+  private recurrenceTick?: NodeJS.Timeout;
   private readonly port: number;
   private readonly logger: Logger;
-  private readonly engineResolver?: EngineResolver;
+  private readonly engineResolver: EngineResolver;
+  private readonly engines: AgentEngine[];
+  private readonly idleMs?: number;
+  private readonly summarizerRunner?: ClaudeRunner;
+  private readonly graceMs?: number;
+  private readonly recurrenceIntervalMs: number;
 
   constructor(opts: DaemonOptions = {}) {
     this.port = opts.port ?? Number(process.env.GREGORIAN_PORT ?? DEFAULT_PORT);
     this.logger = opts.logger ?? consoleLogger;
-    this.engineResolver = opts.engineResolver;
+    this.engineResolver = opts.engineResolver ?? defaultEngineResolver();
+    this.engines = opts.engines ?? [new ClaudeEngine()];
+    this.idleMs = opts.idleMs;
+    this.summarizerRunner = opts.summarizerRunner;
+    this.graceMs = opts.graceMs;
+    this.recurrenceIntervalMs = opts.recurrenceIntervalMs ?? DEFAULT_RECURRENCE_INTERVAL_MS;
   }
 
-  /** Boot the daemon and return the published connection info. Throws {@link PortInUseError} on a taken port. */
+  /**
+   * Boot the daemon and return the published connection info. Throws {@link PortInUseError} on a taken
+   * port. The port is claimed FIRST (fail fast, before reconcile mutates the DB), then the design
+   * lifecycle runs: reconcile → arm pending → start watcher. `daemon.json` is published LAST so a
+   * client never connects to a half-booted daemon.
+   */
   async start(): Promise<DaemonInfo> {
     ensureHome();
     const token = randomBytes(32).toString("hex");
     const store = new Store(dbPath());
-    const scheduler = new Scheduler(store, this.engineResolver, this.logger);
+
+    const minutes = new MinutesService({
+      store,
+      resolveEngine: this.engineResolver,
+      runner: this.summarizerRunner,
+      logger: this.logger,
+    });
+    const onFinalize = (run: Run): void => minutes.onRunFinalized(run);
+
+    const scheduler = new Scheduler(store, this.engineResolver, this.logger, onFinalize);
+    const watcher = new Watcher({
+      store,
+      engines: this.engines,
+      logger: this.logger,
+      idleMs: this.idleMs,
+      onFinalize,
+    });
     const server = createServer(store, scheduler, token, this.logger);
 
+    // Claim the port first — fail fast before reconcile causes any DB side effects.
     await this.listen(server, this.port);
 
-    // Server is up + store open → safe to re-arm. (Past-due events are logged + deferred to m2.)
+    // Design lifecycle: reconcile (re-attach in-flight, missed-fire, re-materialize) → arm → watch.
+    reconcile({
+      store,
+      resolveEngine: this.engineResolver,
+      scheduler,
+      watcher,
+      graceMs: this.graceMs,
+      logger: this.logger,
+    });
     scheduler.armPending();
+    await watcher.start();
+
+    // Rolling-window recurrence refresh. `unref()` so the tick alone never keeps the process alive; the
+    // body is guarded so a throw can never become an unhandled exception (F1).
+    const tick = setInterval(() => {
+      try {
+        materializeRecurrences({ store, scheduler, now: new Date(), logger: this.logger });
+      } catch (err) {
+        this.logger.error(`recurrence tick failed: ${(err as Error).message}`);
+      }
+    }, this.recurrenceIntervalMs);
+    tick.unref();
 
     const address = server.address();
     const boundPort = typeof address === "object" && address ? address.port : this.port;
@@ -93,11 +169,15 @@ export class Daemon {
       pid: process.pid,
       startedAt: new Date().toISOString(),
     };
-    writeDaemonInfo(info);
 
     this.store = store;
     this.scheduler = scheduler;
+    this.watcher = watcher;
     this.server = server;
+    this.recurrenceTick = tick;
+
+    // Publish LAST — the daemon is fully booted and ready to serve.
+    writeDaemonInfo(info);
     this.logger.log(`daemon listening on http://127.0.0.1:${boundPort} (db ${dbPath()})`);
     return info;
   }

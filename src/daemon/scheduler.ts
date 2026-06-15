@@ -17,7 +17,7 @@ import { Cron } from "croner";
 import { randomUUID } from "node:crypto";
 
 import type { Store } from "../store/store.js";
-import type { EngineKind, Event } from "../types.js";
+import type { EngineKind, Event, Run } from "../types.js";
 import type { AgentEngine, RunHandle } from "../engines/types.js";
 import { ClaudeEngine } from "../engines/claude.js";
 
@@ -60,6 +60,13 @@ export class Scheduler {
     private readonly store: Store,
     private readonly resolveEngine: EngineResolver = defaultEngineResolver(),
     private readonly logger: Logger = consoleLogger,
+    /**
+     * Optional hook invoked when `fire()` finalizes a run (done OR failed-with-transcript). The daemon
+     * wires it to the minutes service (R1). Minutes generate even for a non-zero exit (design edge case
+     * 4) — the summarizer decides whether the transcript is usable. Spawn failures (no transcript) do
+     * NOT call this.
+     */
+    private readonly onFinalize?: (run: Run) => void,
   ) {}
 
   /**
@@ -167,6 +174,13 @@ export class Scheduler {
       this.logger.log(
         `event ${event.id} ${status} (exit ${result.exitCode}) transcript ${result.transcriptPath ?? "—"}`,
       );
+
+      // R1: trigger minutes on this finalize path. The watcher's idle finalize may also fire for the
+      // same run — minutes generation is idempotent (run.minutes guard), so whichever wins is fine.
+      if (this.onFinalize) {
+        const finalized = this.store.getRun(run.id);
+        if (finalized) this.onFinalize(finalized);
+      }
     } catch (err) {
       // e.g. Store closed mid-finalize (shutdown race) — log, never crash the daemon.
       this.logger.error(`failed to finalize run ${run.id}: ${(err as Error).message}`);
@@ -181,6 +195,7 @@ export class Scheduler {
         status: "failed",
         exit_code: null,
         ended_at: new Date().toISOString(),
+        error: message, // R5: a failed run records WHY (ENOENT cwd, unsupported engine, spawn error).
       });
       this.store.updateEvent(eventId, { status: "failed" });
     } catch (err) {

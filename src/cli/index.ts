@@ -9,6 +9,7 @@
 
 import { addCommand } from "./commands/add.js";
 import { listCommand } from "./commands/list.js";
+import { showCommand } from "./commands/show.js";
 import { daemonCommand } from "./commands/daemon.js";
 
 const USAGE = `gregorian — a calendar your agents read AND write
@@ -21,6 +22,7 @@ Commands:
   add    --engine <claude|codex> --at <when> [options]
                                  Schedule a one-off run
   list                           Show scheduled + recorded events
+  show   <id>                    Show one event in detail (minutes, error, transcript)
 
 'add' options:
   --engine <claude|codex>   Which agent to launch (required)
@@ -50,6 +52,8 @@ async function main(argv: string[]): Promise<number> {
       return addCommand(rest);
     case "list":
       return listCommand();
+    case "show":
+      return showCommand(rest);
     case "daemon":
       return daemonCommand(rest);
     default:

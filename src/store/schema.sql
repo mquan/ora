@@ -44,5 +44,8 @@ CREATE TABLE IF NOT EXISTS run (
   diff_stat       TEXT,                     -- null for ad-hoc (no before-snapshot)
   minutes         TEXT,
   status          TEXT NOT NULL             -- running|done|failed
+  -- NOTE: `error TEXT` (named failure reason) is added by migration v2 in store.ts, not here —
+  -- this file is the frozen v1 snapshot (append migrations, never edit v1).
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_run_session ON run(session_id);  -- watcher dedup
+-- NOTE: idx_event_recurrence (event.recurrence_rule_id) is also added by migration v2.

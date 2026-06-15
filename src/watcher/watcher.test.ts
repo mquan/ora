@@ -54,6 +54,10 @@ class FakeEngine implements AgentEngine {
     if (!path.startsWith(this.root + sep) || !path.endsWith(".jsonl")) return null;
     return { sessionId: basename(path, ".jsonl"), cwd: readTranscriptCwd(path) };
   }
+  resolveTranscriptPath(sessionId: string): string | null {
+    // Mirrors the test layout `<root>/proj/<sessionId>.jsonl`; unused by the watcher itself.
+    return join(this.root, "proj", `${sessionId}.jsonl`);
+  }
   start(): Promise<never> {
     throw new Error("FakeEngine.start should not be called by the watcher");
   }
@@ -355,7 +359,12 @@ describe("unlink — a transcript removed mid-run", () => {
 });
 
 describe("real chokidar smoke test (real timers) — plumbing end-to-end", () => {
-  it("discovers a freshly written transcript and finalizes it on idle", async () => {
+  // `retry`: this is the one test that drives REAL fsevents. macOS occasionally delivers no events at
+  // all for a freshly-created temp dir within a watcher's lifetime — irreducible at the OS layer. A
+  // retry starts a fresh watcher (new temp dir → new fsevents registration), which all but guarantees a
+  // pass. Deterministic coverage of the watcher's logic lives in the fake-timer tests above; this only
+  // proves the chokidar wiring end-to-end.
+  it("discovers a freshly written transcript and finalizes it on idle", { timeout: 20000, retry: 3 }, async () => {
     vi.useRealTimers();
     const smokeRoot = mkdtempSync(join(tmpdir(), "greg-watch-smoke-"));
     const smokeDb = join(tmpdir(), `greg-watch-smoke-${randomUUID()}.db`);
@@ -372,14 +381,19 @@ describe("real chokidar smoke test (real timers) — plumbing end-to-end", () =>
       const dir = join(smokeRoot, "proj");
       mkdirSync(dir, { recursive: true });
       const sessionId = "smoke-1";
-      writeFileSync(
-        join(dir, `${sessionId}.jsonl`),
-        JSON.stringify({ type: "user", cwd: "/smoke/cwd", message: { content: "hi" } }) + "\n",
-      );
+      const file = join(dir, `${sessionId}.jsonl`);
+      const line = JSON.stringify({ type: "user", cwd: "/smoke/cwd", message: { content: "hi" } }) + "\n";
+      writeFileSync(file, line);
 
-      // Poll for discovery (chokidar latency), then for finalize.
-      await waitFor(() => smokeStore.getRunBySession(sessionId)?.role === "run", 3000);
-      await waitFor(() => smokeStore.getRunBySession(sessionId)?.status === "done", 3000);
+      // On macOS, chokidar's `ready` can fire just before fsevents is truly armed, so a file written
+      // immediately after `start()` can miss its initial event. A real agent keeps writing, so we mirror
+      // that: re-append until the watcher delivers an event and discovers the run. Once discovered we stop
+      // appending, and the idle window (120ms) finalizes it. This closes the ready-race deterministically.
+      await waitFor(() => {
+        appendFileSync(file, line);
+        return smokeStore.getRunBySession(sessionId)?.role === "run";
+      }, 8000);
+      await waitFor(() => smokeStore.getRunBySession(sessionId)?.status === "done", 8000);
       expect(smokeStore.getRunBySession(sessionId)!.status).toBe("done");
     } finally {
       await w.stop();

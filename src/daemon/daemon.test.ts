@@ -31,7 +31,7 @@ import type {
   TranscriptEvent,
   TranscriptIdentity,
 } from "../engines/types.js";
-import type { Event, NewEvent } from "../types.js";
+import type { Event, NewEvent, Run } from "../types.js";
 
 /** Silence the daemon/scheduler logs so test output stays clean; tests assert on state, not logs. */
 const silentLogger: Logger = { log: () => {}, error: () => {} };
@@ -55,6 +55,11 @@ class StubEngine implements AgentEngine {
       status: () => "done",
       result: () => Promise.resolve(result),
     };
+  }
+
+  resolveTranscriptPath(sessionId: string): string | null {
+    // unused by the scheduler; present to satisfy the AgentEngine contract.
+    return `/tmp/stub-transcripts/${sessionId}.jsonl`;
   }
 
   async *parseTranscript(): AsyncIterable<TranscriptEvent> {
@@ -184,6 +189,42 @@ describe("Scheduler", () => {
     expect(store.getEvent(event.id)!.status).toBe("failed");
   });
 
+  it("fire() invokes onFinalize with the done run (R1 minutes hook)", async () => {
+    const engine = new StubEngine((sessionId) =>
+      stubResult({ sessionId, transcriptPath: "/tmp/stub-transcripts/x.jsonl" }),
+    );
+    const finalized: Run[] = [];
+    const sched = new Scheduler(store, () => engine, silentLogger, (r) => finalized.push(r));
+    await sched.fire(store.createEvent(newEvent({ scheduled_at: soon() })));
+
+    expect(finalized).toHaveLength(1);
+    expect(finalized[0]!.status).toBe("done");
+  });
+
+  it("fire() invokes onFinalize even on a non-zero exit (minutes still generate — edge case 4)", async () => {
+    const engine = new StubEngine((sessionId) =>
+      stubResult({ sessionId, exitCode: 3, transcriptPath: "/tmp/stub-transcripts/y.jsonl" }),
+    );
+    const finalized: Run[] = [];
+    const sched = new Scheduler(store, () => engine, silentLogger, (r) => finalized.push(r));
+    await sched.fire(store.createEvent(newEvent({ scheduled_at: soon() })));
+
+    expect(finalized).toHaveLength(1);
+    expect(finalized[0]!.status).toBe("failed");
+  });
+
+  it("failRun records the reason in run.error and does NOT trigger onFinalize (no transcript)", async () => {
+    const engine = new StubEngine(() => stubResult(), /* throwOnStart */ true);
+    const finalized: Run[] = [];
+    const sched = new Scheduler(store, () => engine, silentLogger, (r) => finalized.push(r));
+    await sched.fire(store.createEvent(newEvent({ scheduled_at: soon() })));
+
+    const run = store.listRuns()[0]!;
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("engine start failed");
+    expect(finalized).toHaveLength(0); // a spawn failure has no transcript → no minutes pass
+  });
+
   it("armPending() re-arms scheduled future events from the DB (restart survival)", () => {
     store.createEvent(newEvent({ scheduled_at: soon() }));
     store.createEvent(newEvent({ scheduled_at: soon() }));
@@ -198,6 +239,7 @@ describe("Scheduler", () => {
 
 describe("Daemon HTTP API", () => {
   let home: string;
+  let realCwd: string;
   let daemon: Daemon;
   let base: string;
   let token: string;
@@ -205,6 +247,8 @@ describe("Daemon HTTP API", () => {
 
   beforeEach(async () => {
     home = mkdtempSync(join(tmpdir(), "gregorian-home-"));
+    // R6 validates that the scheduled cwd exists — POST tests must use a real directory.
+    realCwd = mkdtempSync(join(tmpdir(), "gregorian-cwd-"));
     process.env.GREGORIAN_HOME = home;
     engine = new StubEngine((sessionId) => stubResult({ sessionId }));
     daemon = new Daemon({ port: 0, logger: silentLogger, engineResolver: () => engine });
@@ -217,6 +261,7 @@ describe("Daemon HTTP API", () => {
     await daemon.stop();
     delete process.env.GREGORIAN_HOME;
     rmSync(home, { recursive: true, force: true });
+    rmSync(realCwd, { recursive: true, force: true });
   });
 
   const auth = (extra: Record<string, string> = {}): Record<string, string> => ({
@@ -256,7 +301,7 @@ describe("Daemon HTTP API", () => {
     const res = await fetch(`${base}/events`, {
       method: "POST",
       headers: auth({ "content-type": "application/json" }),
-      body: JSON.stringify({ engine: "claude", cwd: "/tmp/x", scheduled_at: soon(), prompt: "list files" }),
+      body: JSON.stringify({ engine: "claude", cwd: realCwd, scheduled_at: soon(), prompt: "list files" }),
     });
     expect(res.status).toBe(201);
     const { event } = (await res.json()) as { event: Event };
@@ -279,9 +324,27 @@ describe("Daemon HTTP API", () => {
         })
       ).status;
 
-    expect(await bad({ engine: "nope", cwd: "/tmp/x", scheduled_at: soon() })).toBe(400);
+    expect(await bad({ engine: "nope", cwd: realCwd, scheduled_at: soon() })).toBe(400);
     expect(await bad({ engine: "claude", scheduled_at: soon() })).toBe(400); // missing cwd
-    expect(await bad({ engine: "claude", cwd: "/tmp/x", scheduled_at: "not-a-date" })).toBe(400);
+    expect(await bad({ engine: "claude", cwd: realCwd, scheduled_at: "not-a-date" })).toBe(400);
+  });
+
+  it("POST /events rejects a non-existent cwd with a 400 (R6 — trust boundary)", async () => {
+    const missing = join(realCwd, "does", "not", "exist");
+    const res = await fetch(`${base}/events`, {
+      method: "POST",
+      headers: auth({ "content-type": "application/json" }),
+      body: JSON.stringify({ engine: "claude", cwd: missing, scheduled_at: soon(), prompt: "x" }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe("bad_request");
+    expect(body.message).toContain("cwd does not exist");
+
+    // …and nothing was scheduled.
+    const list = await fetch(`${base}/events`, { headers: auth() });
+    const { events } = (await list.json()) as { events: Event[] };
+    expect(events).toHaveLength(0);
   });
 
   it("GET /events and GET /runs return arrays", async () => {

@@ -281,13 +281,25 @@ describe("Daemon HTTP API", () => {
     expect(base.startsWith("http://127.0.0.1:")).toBe(true);
   });
 
-  it("GET / is a 200 unauthenticated landing page (not a bare 401)", async () => {
+  it("GET / serves the web SPA shell, unauthenticated (no bare 401)", async () => {
     const res = await fetch(`${base}/`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { name: string; status: string; routes: string[] };
-    expect(body.name).toBe("gregorian");
-    expect(body.status).toBe("ok");
-    expect(body.routes).toContain("GET /health");
+    expect(res.headers.get("content-type")).toMatch(/text\/html/);
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    const body = await res.text();
+    expect(body.toLowerCase()).toContain("gregorian");
+  });
+
+  it("GET /runs/:id/transcript requires a bearer token", async () => {
+    const res = await fetch(`${base}/runs/whatever/transcript`);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /runs/:id/transcript 404s an unknown run id with a named error", async () => {
+    const res = await fetch(`${base}/runs/does-not-exist/transcript`, { headers: auth() });
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("not_found");
   });
 
   it("rejects authed routes without a valid bearer token", async () => {
@@ -354,9 +366,17 @@ describe("Daemon HTTP API", () => {
     expect(Array.isArray((runs as { runs: unknown[] }).runs)).toBe(true);
   });
 
-  it("returns 404 for an unknown route", async () => {
-    const res = await fetch(`${base}/nope`, { headers: auth() });
+  it("returns a JSON 404 for an unknown non-GET route", async () => {
+    // Unknown GETs now fall through to the SPA (static); the JSON 404 fallback covers other methods.
+    const res = await fetch(`${base}/nope`, { method: "POST", headers: auth() });
     expect(res.status).toBe(404);
+    expect((await res.json() as { error: string }).error).toBe("not_found");
+  });
+
+  it("serves the SPA (not a JSON 404) for an unknown extensionless GET route", async () => {
+    const res = await fetch(`${base}/some/app/route`, { headers: auth() });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/text\/html/);
   });
 
   it("rejects an over-cap body with 413 (declared Content-Length fast path)", async () => {

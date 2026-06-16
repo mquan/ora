@@ -23,4 +23,19 @@ export default tseslint.config(
       globals: { console: "readonly", process: "readonly", URL: "readonly" },
     },
   },
+  {
+    // The web SPA bootstrap runs in the browser — give it browser globals so no-undef passes.
+    files: ["web/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        window: "readonly",
+        document: "readonly",
+        sessionStorage: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+      },
+    },
+  },
 );

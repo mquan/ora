@@ -133,7 +133,9 @@ export class Daemon {
       idleMs: this.idleMs,
       onFinalize,
     });
-    const server = createServer(store, scheduler, token, this.logger);
+    const server = createServer(store, scheduler, token, this.logger, {
+      resolveEngine: this.engineResolver,
+    });
 
     // Claim the port first — fail fast before reconcile causes any DB side effects.
     await this.listen(server, this.port);

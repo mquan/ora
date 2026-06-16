@@ -3,16 +3,20 @@
  * use to talk to the single-writer daemon. Built on `node:http` (zero new dependency; a 4-route JSON
  * API needs no framework — m5 reuses this *surface*, free to pick a framework behind it).
  *
- * Routes (all JSON):
- *   GET  /health   → liveness, NO auth (so the CLI can distinguish "daemon down" from "bad token")
- *   POST /events   → create + arm an event            (auth)
- *   GET  /events   → list events                      (auth)
- *   GET  /runs     → list runs                         (auth)
+ * Routes:
+ *   GET  /health                 → liveness, NO auth (CLI distinguishes "down" from "bad token")
+ *   POST /events                 → create + arm an event                            (auth, JSON)
+ *   GET  /events                 → list events                                      (auth, JSON)
+ *   GET  /events/:id             → one event + its runs                             (auth, JSON)
+ *   GET  /runs                   → list runs                                        (auth, JSON)
+ *   GET  /runs/:id/transcript    → one run's normalized transcript                  (auth, JSON)
+ *   GET  *  (anything else)      → the web SPA + its assets                       (NO auth, static)
  *
- * Security: bind `127.0.0.1` ONLY (the daemon's `listen` host, asserted in tests). Every route but
- * `/health` requires `Authorization: Bearer <token>`, compared in constant time. POST bodies are
- * capped (a runaway prompt can't exhaust daemon memory). No silent failures — every error path returns
- * a named JSON error with a non-2xx status.
+ * Security: bind `127.0.0.1` ONLY (the daemon's `listen` host, asserted in tests). Every JSON API route
+ * but `/health` requires `Authorization: Bearer <token>`, compared in constant time. The static app code
+ * carries NO secret — the browser receives the token via the URL `gregorian ui` opens, not via this HTML
+ * — so serving it unauthenticated is safe. POST bodies are capped (a runaway prompt can't exhaust daemon
+ * memory). No silent failures — every error path returns a named error with a non-2xx status.
  */
 
 import {
@@ -26,7 +30,15 @@ import { statSync } from "node:fs";
 
 import type { Store } from "../store/store.js";
 import type { EngineKind } from "../types.js";
-import { Scheduler, consoleLogger, type Logger } from "./scheduler.js";
+import {
+  Scheduler,
+  consoleLogger,
+  defaultEngineResolver,
+  type EngineResolver,
+  type Logger,
+} from "./scheduler.js";
+import { serveStatic, webRoot } from "../web/static.js";
+import { readRunTranscript } from "../web/transcript.js";
 
 /** The POST /events request body — the add contract shared with the CLI `add` command. */
 export interface AddEventRequest {
@@ -167,6 +179,22 @@ function titleFor(req: AddEventRequest): string {
   return "untitled run";
 }
 
+/** Options for the browser-facing layer; both have safe production defaults. */
+export interface ServerOptions {
+  /** Resolves a run's engine for the transcript route. Defaults to the standard resolver. */
+  resolveEngine?: EngineResolver;
+  /** Directory holding the built web SPA assets. Defaults to {@link webRoot}. */
+  webRoot?: string;
+}
+
+/** Is this GET an authed JSON API route (vs. a static/SPA path served unauthenticated)? */
+function isApiGet(pathname: string): boolean {
+  if (pathname === "/events" || pathname.startsWith("/events/")) return true;
+  if (pathname === "/runs") return true;
+  if (pathname.startsWith("/runs/") && pathname.endsWith("/transcript")) return true;
+  return false;
+}
+
 /**
  * Build the daemon's HTTP server. Construction is pure (no `listen`) so tests can drive it on an
  * ephemeral port and the daemon controls binding/teardown.
@@ -176,9 +204,12 @@ export function createServer(
   scheduler: Scheduler,
   token: string,
   logger: Logger = consoleLogger,
+  opts: ServerOptions = {},
 ): Server {
+  const resolveEngine = opts.resolveEngine ?? defaultEngineResolver();
+  const assetsRoot = opts.webRoot ?? webRoot();
   return createHttpServer((req, res) => {
-    void handle(req, res, store, scheduler, token).catch((err) => {
+    void handle(req, res, store, scheduler, token, resolveEngine, assetsRoot).catch((err) => {
       logger.error(`unhandled request error: ${(err as Error).message}`);
       sendJson(res, 500, { error: "internal", message: (err as Error).message });
     });
@@ -191,6 +222,8 @@ async function handle(
   store: Store,
   scheduler: Scheduler,
   token: string,
+  resolveEngine: EngineResolver,
+  assetsRoot: string,
 ): Promise<void> {
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
   const { pathname } = url;
@@ -202,16 +235,10 @@ async function handle(
     return;
   }
 
-  // Friendly, unauthenticated landing at the root so a browser sees the daemon is alive (rather than
-  // a bare 401). It's a JSON API today; the web UI lands in m5. No secrets here — just orientation.
-  if (pathname === "/" && method === "GET") {
-    sendJson(res, 200, {
-      name: "gregorian",
-      status: "ok",
-      message: "gregorian daemon is running. This is a JSON API; the web UI ships in a later milestone.",
-      hint: "Use the CLI: `gregorian add …` and `gregorian list`. Authed routes need a bearer token.",
-      routes: ["GET /health", "GET /events", "POST /events", "GET /runs"],
-    });
+  // The web SPA + its assets are served unauthenticated for any GET that isn't a JSON API route — app
+  // code holds no secret. The browser gets the bearer token from the URL `gregorian ui` opens, not here.
+  if (method === "GET" && !isApiGet(pathname)) {
+    serveStatic(req, res, assetsRoot, pathname);
     return;
   }
 
@@ -271,6 +298,21 @@ async function handle(
 
   if (method === "GET" && pathname === "/runs") {
     sendJson(res, 200, { runs: store.listRuns() });
+    return;
+  }
+
+  // One run's normalized transcript — the data source for the web transcript viewer. 404 only when the
+  // run id is unknown; a run that exists but has a null/missing/unreadable transcript returns 200 with a
+  // named `reason` (no silent failures, no fabricated content).
+  if (method === "GET" && pathname.startsWith("/runs/") && pathname.endsWith("/transcript")) {
+    const id = decodeURIComponent(pathname.slice("/runs/".length, -"/transcript".length));
+    const run = store.getRun(id);
+    if (!run) {
+      sendJson(res, 404, { error: "not_found", message: `no run ${id}` });
+      return;
+    }
+    const transcript = await readRunTranscript(run, resolveEngine);
+    sendJson(res, 200, { transcript });
     return;
   }
 

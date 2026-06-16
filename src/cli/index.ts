@@ -2,15 +2,17 @@
 /**
  * gregorian CLI entry point.
  *
- * Dispatches to the m1 commands — `add`, `list`, `daemon`. `add`/`list` are HTTP clients of the running
- * daemon (127.0.0.1 + token); `daemon` is the long-lived server itself. Unknown input exits non-zero so
- * failures are never silent. Later milestones add `show`, `tail`, `ui`, `install`.
+ * Dispatches to the commands — `add`, `list`, `show`, `daemon`, `ui`. `add`/`list`/`show` are HTTP
+ * clients of the running daemon (127.0.0.1 + token); `daemon` is the long-lived server itself; `ui`
+ * ensures the daemon is up and opens the browser. Unknown input exits non-zero so failures are never
+ * silent. Later milestones add `tail`, `install`.
  */
 
 import { addCommand } from "./commands/add.js";
 import { listCommand } from "./commands/list.js";
 import { showCommand } from "./commands/show.js";
 import { daemonCommand } from "./commands/daemon.js";
+import { uiCommand } from "./commands/ui.js";
 
 const USAGE = `gregorian — a calendar your agents read AND write
 
@@ -23,6 +25,7 @@ Commands:
                                  Schedule a one-off run
   list                           Show scheduled + recorded events
   show   <id>                    Show one event in detail (minutes, error, transcript)
+  ui                             Ensure the daemon is up and open the timeline in a browser
 
 'add' options:
   --engine <claude|codex>   Which agent to launch (required)
@@ -56,6 +59,8 @@ async function main(argv: string[]): Promise<number> {
       return showCommand(rest);
     case "daemon":
       return daemonCommand(rest);
+    case "ui":
+      return uiCommand();
     default:
       process.stderr.write(`gregorian: unknown command '${cmd}'\nRun 'gregorian --help' for usage.\n`);
       return 1;

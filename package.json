@@ -17,13 +17,14 @@
   },
   "files": [
     "dist",
-    "web"
+    "web/dist"
   ],
   "engines": {
     "node": ">=20 <23"
   },
   "scripts": {
     "build": "tsc && node scripts/copy-assets.mjs",
+    "build:web": "npm --prefix web install && npm --prefix web run build",
     "prestart": "npm run build",
     "start": "node dist/cli/index.js daemon",
     "cli": "node dist/cli/index.js",

@@ -1,6 +1,10 @@
 node_modules/
 dist/
 
+# Web SPA (Vite): source lives in web/src; build output + its deps are generated
+web/dist/
+web/node_modules/
+
 # SQLite store (better-sqlite3 WAL mode)
 *.db
 *.db-wal

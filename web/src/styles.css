@@ -1,0 +1,654 @@
+/* gregorian web — hand-rolled CSS (no framework), Google-Calendar-ish. Status palette in CSS vars. */
+
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --line: #dadce0;
+  --line-soft: #e8eaed;
+  --text: #202124;
+  --muted: #5f6368;
+  --accent: #1a73e8;
+  --hour-h: 48px;
+  --gutter: 56px;
+
+  --st-scheduled: #1a73e8;
+  --st-running: #f9ab00;
+  --st-done: #188038;
+  --st-failed: #d93025;
+  --st-missed: #80868b;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1f1f1f;
+    --surface: #202124;
+    --line: #3c4043;
+    --line-soft: #2d2e30;
+    --text: #e8eaed;
+    --muted: #9aa0a6;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.muted {
+  color: var(--muted);
+}
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}
+.small {
+  font-size: 0.8em;
+}
+.pad {
+  padding: 1rem;
+}
+
+/* ── Top bar ───────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.brand {
+  font-weight: 600;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.brand .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.period {
+  font-weight: 500;
+  margin-left: 0.4rem;
+  white-space: nowrap;
+}
+.spacer {
+  flex: 1;
+}
+.views {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.seg {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+  font: inherit;
+}
+.seg + .seg {
+  border-left: 1px solid var(--line);
+}
+.seg-on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.btn {
+  font: inherit;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+.btn:hover {
+  background: var(--line-soft);
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.btn-primary:hover {
+  filter: brightness(0.95);
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.icon-btn {
+  font: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  width: 2rem;
+  height: 2rem;
+  cursor: pointer;
+}
+.icon-btn:hover {
+  background: var(--line-soft);
+}
+.link {
+  border: none;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.statusline {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.25rem 1rem;
+  font-size: 0.82rem;
+  min-height: 1.6rem;
+}
+.banner {
+  color: var(--st-failed);
+}
+
+.surface {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 0.5rem 0.5rem;
+}
+
+/* ── Status palette helpers ────────────────────────────── */
+.status-scheduled {
+  --c: var(--st-scheduled);
+}
+.status-running {
+  --c: var(--st-running);
+}
+.status-done {
+  --c: var(--st-done);
+}
+.status-failed {
+  --c: var(--st-failed);
+}
+.status-missed {
+  --c: var(--st-missed);
+}
+
+.live {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 0%, transparent);
+  }
+}
+
+.pill {
+  display: inline-block;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: #fff;
+  background: var(--c, var(--muted));
+}
+
+/* ── Week view ─────────────────────────────────────────── */
+.week {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+.week-head {
+  display: grid;
+  grid-template-columns: var(--gutter) repeat(7, 1fr);
+  border-bottom: 1px solid var(--line);
+}
+.gutter-head {
+  border-right: 1px solid var(--line-soft);
+}
+.day-head {
+  text-align: center;
+  padding: 0.3rem 0;
+  border-left: 1px solid var(--line-soft);
+}
+.day-head .dow {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.day-head .dnum {
+  font-size: 1.15rem;
+  font-weight: 500;
+}
+.day-head.is-today .dnum {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0 0.45rem;
+  display: inline-block;
+}
+
+.week-body {
+  display: grid;
+  grid-template-columns: var(--gutter) repeat(7, 1fr);
+  overflow-y: auto;
+  position: relative;
+}
+.gutter {
+  position: relative;
+}
+.hour-label {
+  height: var(--hour-h);
+  text-align: right;
+  padding-right: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  transform: translateY(-0.5em);
+  border-right: 1px solid var(--line-soft);
+}
+.day-col {
+  position: relative;
+  border-left: 1px solid var(--line-soft);
+}
+.day-col.is-today {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.hour-cell {
+  height: var(--hour-h);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.block {
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--c) 60%, #000);
+  border-left: 3px solid var(--c);
+  background: color-mix(in srgb, var(--c) 18%, var(--surface));
+  border-radius: 5px;
+  padding: 1px 5px;
+  overflow: hidden;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-height: 14px;
+}
+.block:hover {
+  filter: brightness(0.97);
+  z-index: 5;
+}
+.block-time {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+.block-title {
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.now-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px solid var(--st-failed);
+  z-index: 6;
+  pointer-events: none;
+}
+.now-line::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--st-failed);
+}
+
+/* ── Month view ────────────────────────────────────────── */
+.month {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+.month-head {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid var(--line);
+}
+.month-dow {
+  text-align: center;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0.3rem 0;
+}
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 1fr;
+  height: 100%;
+}
+.mcell {
+  border-right: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  padding: 2px 3px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mcell.outside {
+  background: var(--line-soft);
+  color: var(--muted);
+}
+.mcell-num {
+  font-size: 0.78rem;
+  text-align: right;
+  padding-right: 2px;
+}
+.mcell.is-today .mcell-num {
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  width: 1.4rem;
+  height: 1.4rem;
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+}
+.chips {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+.chip {
+  text-align: left;
+  border: none;
+  border-left: 3px solid var(--c);
+  background: color-mix(in srgb, var(--c) 16%, var(--surface));
+  color: var(--text);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  font-family: inherit;
+}
+.chip-time {
+  color: var(--muted);
+}
+.more {
+  font-size: 0.7rem;
+  color: var(--muted);
+  padding-left: 2px;
+}
+
+/* ── Agenda view ───────────────────────────────────────── */
+.agenda {
+  height: 100%;
+  overflow-y: auto;
+  padding: 0.5rem 0.75rem;
+  max-width: 52rem;
+}
+.agenda-day {
+  margin-bottom: 1rem;
+}
+.agenda-day h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 0.25rem;
+  margin: 0 0 0.4rem;
+}
+.agenda-day h3.is-today {
+  color: var(--accent);
+}
+.agenda-row {
+  display: grid;
+  grid-template-columns: 5.5rem 6rem 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  color: var(--text);
+  padding: 0.35rem 0.25rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+.agenda-row:hover {
+  background: var(--line-soft);
+}
+.agenda-time {
+  color: var(--muted);
+}
+.agenda-title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty-state {
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 0.25rem;
+}
+
+/* ── Overlay / form panel ──────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+  padding: 1rem;
+}
+.panel {
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  max-height: 90vh;
+  overflow: auto;
+}
+.form-panel {
+  width: min(34rem, 100%);
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+}
+.panel-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 1rem;
+}
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.form input,
+.form select,
+.form textarea {
+  font: inherit;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+}
+.form textarea {
+  resize: vertical;
+}
+.form-error {
+  color: var(--st-failed);
+  background: color-mix(in srgb, var(--st-failed) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--st-failed) 35%, transparent);
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.85rem;
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+/* ── Detail drawer ─────────────────────────────────────── */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 40;
+}
+.drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: min(30rem, 100%);
+  background: var(--surface);
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.25);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.detail {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+}
+.meta dt {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.meta dd {
+  margin: 0;
+  word-break: break-word;
+}
+.block-section h3 {
+  font-size: 0.85rem;
+  margin: 0 0 0.35rem;
+}
+.text-block {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--line-soft);
+  border-radius: 8px;
+  padding: 0.6rem;
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  max-height: 18rem;
+  overflow: auto;
+}
+.run-card {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--c);
+  border-radius: 8px;
+  padding: 0.6rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.run-line {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+}
+.run-error {
+  color: var(--st-failed);
+  font-size: 0.85rem;
+}
+.minutes summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+}

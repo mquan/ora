@@ -37,17 +37,19 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 /**
- * Resolve the directory that holds the built web assets. Walk up from this module to the nearest
- * `package.json` and join `web` — correct under both vitest (runs from `src/`) and the published
- * package (`web/` ships beside `dist/`, see package.json `files`). A later task repoints THIS helper
- * to its Vite output; everything else takes `webRoot` as a parameter.
+ * Resolve the directory that holds the BUILT web assets — the Vite SPA's output at `web/dist`. The SPA's
+ * source lives in `web/src` and the build emits to `web/dist`; the daemon serves only the built output.
+ * Walk up from this module to the nearest `package.json` and join `web/dist` — correct under both vitest
+ * (runs from `src/`) and the published package (`web/dist` ships beside `dist/`, see package.json `files`).
+ * Everything else takes `webRoot` as a parameter. When no build exists yet, `serveStatic` degrades to a
+ * placeholder page, so a missing `web/dist` is non-fatal.
  */
 export function webRoot(): string {
   let dir = dirname(fileURLToPath(import.meta.url));
   // Bounded walk — stop at the filesystem root rather than loop forever.
   for (let i = 0; i < 10; i++) {
     try {
-      if (readdirSync(dir).includes("package.json")) return join(dir, "web");
+      if (readdirSync(dir).includes("package.json")) return join(dir, "web", "dist");
     } catch {
       // Unreadable dir — give up the walk; the caller's missing-root path handles it.
       break;
@@ -57,7 +59,7 @@ export function webRoot(): string {
     dir = parent;
   }
   // Fallback: assume a conventional layout relative to this module.
-  return join(dirname(fileURLToPath(import.meta.url)), "..", "..", "web");
+  return join(dirname(fileURLToPath(import.meta.url)), "..", "..", "web", "dist");
 }
 
 /** The content-type for a path's extension, defaulting to a safe binary type. */

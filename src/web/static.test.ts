@@ -13,7 +13,14 @@ import { AddressInfo } from "node:net";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { serveStatic } from "./static.js";
+import { serveStatic, webRoot } from "./static.js";
+
+describe("webRoot", () => {
+  it("resolves to the Vite build output (web/dist), not the source web dir", () => {
+    const root = webRoot();
+    expect(root.endsWith(join("web", "dist"))).toBe(true);
+  });
+});
 
 describe("serveStatic", () => {
   let root: string;

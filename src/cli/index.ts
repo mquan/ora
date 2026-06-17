@@ -2,17 +2,19 @@
 /**
  * gregorian CLI entry point.
  *
- * Dispatches to the commands — `add`, `list`, `show`, `daemon`, `ui`. `add`/`list`/`show` are HTTP
- * clients of the running daemon (127.0.0.1 + token); `daemon` is the long-lived server itself; `ui`
- * ensures the daemon is up and opens the browser. Unknown input exits non-zero so failures are never
- * silent. Later milestones add `tail`, `install`.
+ * Dispatches to the commands — `add`, `list`, `show`, `daemon`, `ui`, `install`, `uninstall`.
+ * `add`/`list`/`show` are HTTP clients of the running daemon (127.0.0.1 + token); `daemon` is the
+ * long-lived server itself; `ui` ensures the daemon is up and opens the browser; `install`/`uninstall`
+ * manage the macOS launchd keep-alive. Unknown input exits non-zero so failures are never silent.
+ *
+ * Command modules are imported LAZILY (dynamic `import()` per case) for one load-bearing reason: the
+ * better-sqlite3 native module is a static top-level import in the store, so a failed native build would
+ * otherwise crash the entry at module-evaluation time with a raw stack trace — before any of our code
+ * runs. By not statically importing the store-touching commands, the entry loads cleanly and the
+ * native-module preflight below turns that failure into a friendly message instead.
  */
 
-import { addCommand } from "./commands/add.js";
-import { listCommand } from "./commands/list.js";
-import { showCommand } from "./commands/show.js";
-import { daemonCommand } from "./commands/daemon.js";
-import { uiCommand } from "./commands/ui.js";
+import { checkNativeModules } from "../install/native-check.js";
 
 const USAGE = `gregorian — a calendar your agents read AND write
 
@@ -26,6 +28,8 @@ Commands:
   list                           Show scheduled + recorded events
   show   <id>                    Show one event in detail (minutes, error, transcript)
   ui                             Ensure the daemon is up and open the timeline in a browser
+  install                        Install the macOS launchd keep-alive (daemon survives logout/login)
+  uninstall                      Remove the macOS launchd keep-alive
 
 'add' options:
   --engine <claude|codex>   Which agent to launch (required)
@@ -50,17 +54,30 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
+  // First-run native-module preflight: if better-sqlite3 didn't load, print a friendly message and
+  // exit rather than crashing inside a command with a raw ERR_DLOPEN_FAILED stack. Runs before any
+  // command module (which may statically import the store) is loaded below.
+  const native = checkNativeModules();
+  if (!native.ok) {
+    process.stderr.write(native.message + "\n");
+    return 1;
+  }
+
   switch (cmd) {
     case "add":
-      return addCommand(rest);
+      return (await import("./commands/add.js")).addCommand(rest);
     case "list":
-      return listCommand();
+      return (await import("./commands/list.js")).listCommand();
     case "show":
-      return showCommand(rest);
+      return (await import("./commands/show.js")).showCommand(rest);
     case "daemon":
-      return daemonCommand(rest);
+      return (await import("./commands/daemon.js")).daemonCommand(rest);
     case "ui":
-      return uiCommand();
+      return (await import("./commands/ui.js")).uiCommand();
+    case "install":
+      return (await import("./commands/install.js")).installCommand(rest);
+    case "uninstall":
+      return (await import("./commands/install.js")).uninstallCommand(rest);
     default:
       process.stderr.write(`gregorian: unknown command '${cmd}'\nRun 'gregorian --help' for usage.\n`);
       return 1;

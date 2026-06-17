@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Validate the release without publishing (npm publish --dry-run)"
+        type: boolean
+        default: true
+
+# Only read access is needed; npm auth is handled via NODE_AUTH_TOKEN.
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # Build explicitly (web SPA + TS) so a build break fails here with a clear
+      # step name, before publish. prepublishOnly re-runs this on publish too.
+      - name: Build (web SPA + TypeScript)
+        run: npm run build:web && npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Verify CLI help
+        run: node dist/cli/index.js --help
+
+      # Tag pushes only: the pushed tag must match package.json. Prevents shipping
+      # a version that disagrees with the tag.
+      - name: Guard — tag matches package.json version
+        if: github.event_name == 'push'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag v$tag does not match package.json version $pkg. Bump package.json or retag."
+            exit 1
+          fi
+          echo "Tag v$tag matches package.json version $pkg."
+
+      # Real publish on a tag push, or on a manual dispatch with dry_run=false.
+      # Everything else (the default dispatch) validates via --dry-run.
+      - name: Determine publish mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "false" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Never publish silently: fail loudly if the token is missing on a real publish.
+      - name: Guard — NPM_TOKEN present for real publish
+        if: steps.mode.outputs.publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is empty — refusing to publish. Provision it in repo secrets and retry."
+            exit 1
+          fi
+
+      - name: Publish to npm
+        if: steps.mode.outputs.publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish
+
+      - name: Publish (dry run — no upload)
+        if: steps.mode.outputs.publish != 'true'
+        run: npm publish --dry-run

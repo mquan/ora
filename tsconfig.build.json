@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "comment": "Emit config for `npm run build` / publishing: excludes tests so compiled *.test.js never ships in dist/. The base tsconfig.json still includes tests for `npm run typecheck` and the editor.",
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}

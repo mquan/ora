@@ -1,9 +1,28 @@
 {
-  "name": "gregorian",
+  "name": "@mquan/gregorian",
   "version": "0.0.0",
   "description": "A calendar your agents read AND write — schedule and record local AI agent runs (Claude Code, Codex).",
   "type": "module",
   "license": "MIT",
+  "author": "Quan Nguyen",
+  "homepage": "https://github.com/mquan/gregorian#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mquan/gregorian.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mquan/gregorian/issues"
+  },
+  "keywords": [
+    "ai-agents",
+    "claude-code",
+    "codex",
+    "scheduler",
+    "cron",
+    "calendar",
+    "automation",
+    "cli"
+  ],
   "bin": {
     "gregorian": "dist/cli/index.js"
   },
@@ -17,14 +36,20 @@
   },
   "files": [
     "dist",
-    "web/dist"
+    "web/dist",
+    "docs/getting-started.md",
+    "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=20 <23"
   },
   "scripts": {
-    "build": "tsc && node scripts/copy-assets.mjs",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
     "build:web": "npm --prefix web install && npm --prefix web run build",
+    "prepublishOnly": "npm run build:web && npm run build",
     "prestart": "npm run build",
     "start": "node dist/cli/index.js daemon",
     "cli": "node dist/cli/index.js",

@@ -2,7 +2,19 @@
 
 A calendar your agents read AND write. Schedule and record local AI agent runs (Claude Code, Codex) on one timeline, with auto-generated "minutes."
 
-Status: scaffolding (DRI project, milestone m1).
+## Get started in 60 seconds
+
+```bash
+npx @mquan/gregorian install                                            # macOS: start the recorder daemon + keep it alive at login
+npx @mquan/gregorian add --engine claude --at +1m --prompt 'list files' # schedule a run one minute out
+npx @mquan/gregorian list                                               # watch it fire
+npx @mquan/gregorian show <id>                                          # read the auto-generated minutes
+```
+
+Prefer to type just `gregorian`? `npm install -g @mquan/gregorian` first. No `ANTHROPIC_API_KEY`
+required — gregorian drives your existing local `claude` / `codex` login. Not on macOS? Run the daemon
+in the foreground with `gregorian daemon` instead of `install`. Full walkthrough, flags, and the web
+timeline: [docs/getting-started.md](docs/getting-started.md).
 
 ## Requirements
 

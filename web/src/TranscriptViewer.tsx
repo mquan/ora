@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { ApiError, NetworkError, getTranscript } from "./api";
+import { Markdown } from "./Markdown";
 import { highlight, toolPayload } from "./shiki";
 import type { TranscriptEvent, TranscriptResult } from "./types";
 
@@ -16,8 +17,9 @@ import type { TranscriptEvent, TranscriptResult } from "./types";
  * No silent failures: every degraded state (unreachable daemon, named server `reason`, empty entries,
  * all-unrenderable entries, truncation) shows a visible, named notice.
  *
- * Trust boundary: message/result text is agent-authored and rendered as React text (auto-escaped).
- * Only Shiki output — which escapes source into `<span>` text nodes — goes through
+ * Trust boundary: message/result text is agent-authored and rendered safely — message prose goes through
+ * `<Markdown>` (react-markdown → React elements, no raw-HTML passthrough), tool results stay preformatted
+ * text. Only Shiki output — which escapes source into `<span>` text nodes — goes through
  * `dangerouslySetInnerHTML`.
  */
 
@@ -122,7 +124,7 @@ function EntryRow({ entry }: { entry: TranscriptEvent }) {
       return (
         <li className={`t-entry t-message t-${role}`}>
           <span className="t-label">{role}</span>
-          <div className="t-text">{text}</div>
+          <Markdown className="t-text" content={text} />
         </li>
       );
     }

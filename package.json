@@ -47,7 +47,8 @@
     "node": ">=20 <23"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
     "build:web": "npm --prefix web install && npm --prefix web run build",
     "prepublishOnly": "npm run build:web && npm run build",
     "prestart": "npm run build",

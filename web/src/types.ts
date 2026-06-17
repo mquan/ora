@@ -44,6 +44,33 @@ export interface Run {
   error: string | null;
 }
 
+/** One normalized transcript entry (mirrors the daemon's `TranscriptEvent`). `raw` keeps the original
+ *  JSONL object so nothing is ever lost. */
+export type TranscriptEventType = "message" | "tool_use" | "tool_result" | "system" | "unknown";
+
+export interface TranscriptEvent {
+  type: TranscriptEventType;
+  role?: "user" | "assistant" | "system";
+  /** Flattened human-readable text, when the entry has any. */
+  text?: string;
+  /** Tool name for `tool_use`/`tool_result` entries. */
+  toolName?: string;
+  /** ISO timestamp, when the entry carries one. */
+  timestamp?: string;
+  /** The untouched source object for this transcript line. */
+  raw: unknown;
+}
+
+/** What `GET /runs/:id/transcript` returns (mirrors the daemon's `TranscriptResult`). Degraded reads
+ *  arrive as 200 with a named `reason` — never a silent failure. */
+export interface TranscriptResult {
+  path: string | null;
+  byteSize: number;
+  entries: TranscriptEvent[];
+  truncated: boolean;
+  reason?: string;
+}
+
 /** Request body for `POST /events`. */
 export interface CreateEventBody {
   engine: Engine;

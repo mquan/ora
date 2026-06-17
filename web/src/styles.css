@@ -646,9 +646,115 @@ body {
   color: var(--st-failed);
   font-size: 0.85rem;
 }
-.minutes summary {
+.minutes summary,
+.transcript > summary {
   cursor: pointer;
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--accent);
+}
+
+/* ── Transcript viewer ─────────────────────────────────── */
+.transcript-body {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.transcript-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.link-btn {
+  border: none;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  padding: 0;
+}
+.transcript-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.t-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.t-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+.t-message.t-assistant .t-label {
+  color: var(--accent);
+}
+.t-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85rem;
+}
+.t-tool-result > details > summary {
+  cursor: pointer;
+  list-style: revert;
+}
+.t-system {
+  font-size: 0.8rem;
+}
+.t-system .t-label {
+  display: inline;
+}
+.transcript-truncated {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 0.4rem;
+}
+
+/* Shiki code blocks. `defaultColor:false` emits per-token CSS vars; we map them to the active scheme. */
+.code-block {
+  margin: 0;
+  border-radius: 8px;
+  overflow: auto;
+  max-height: 22rem;
+  font-size: 0.78rem;
+}
+.code-block.code-fallback {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--line-soft);
+  padding: 0.6rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.code-block .shiki {
+  margin: 0;
+  padding: 0.6rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.code-block .shiki,
+.code-block .shiki span {
+  color: var(--shiki-light);
+}
+.code-block .shiki {
+  background-color: var(--shiki-light-bg);
+}
+@media (prefers-color-scheme: dark) {
+  .code-block .shiki,
+  .code-block .shiki span {
+    color: var(--shiki-dark);
+  }
+  .code-block .shiki {
+    background-color: var(--shiki-dark-bg);
+  }
 }

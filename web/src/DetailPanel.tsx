@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { getEvent, ApiError, NetworkError } from "./api";
+import { MinutesPanel } from "./MinutesPanel";
+import { TranscriptViewer } from "./TranscriptViewer";
 import type { GregorianEvent, Run } from "./types";
 
 /**
- * The event detail drawer. This task ships the SHELL: event metadata + per-run summary + the run's `minutes`
- * as plain (React-escaped) text. The rich, Shiki-highlighted transcript viewer and a polished minutes panel
- * are the NEXT task (`web-transcript-viewer` → TranscriptViewer.tsx / MinutesPanel.tsx). The clearly-marked
- * SEAM below is where those mount; this file deliberately does not implement them.
+ * The event detail drawer: event metadata + per-run summary, each run's generated `minutes`
+ * (MinutesPanel) and its Shiki-highlighted transcript (TranscriptViewer, lazy — fetches on expand).
  *
- * Trust boundary: `minutes`, `prompt`, `title`, `cwd` are agent/user-authored. They are rendered as React
- * text (auto-escaped) only — no `dangerouslySetInnerHTML` anywhere.
+ * Trust boundary: `prompt`, `title`, `cwd`, and run `error` are agent/user-authored and rendered as
+ * React text (auto-escaped). The only `dangerouslySetInnerHTML` is inside TranscriptViewer's Shiki
+ * code blocks, where Shiki has already escaped the source into span text nodes.
  */
 
 const dtFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -137,18 +138,8 @@ export function DetailPanel({ eventId, onClose }: DetailPanelProps) {
                     {run.exit_code !== null && <span className="muted">· exit {run.exit_code}</span>}
                   </div>
                   {run.error && <div className="run-error">⚠ {run.error}</div>}
-                  {run.minutes && (
-                    <details className="minutes">
-                      <summary>Minutes</summary>
-                      {/* SEAM: web-transcript-viewer replaces this with <MinutesPanel run={run} />. */}
-                      <pre className="text-block">{run.minutes}</pre>
-                    </details>
-                  )}
-                  {/* SEAM: web-transcript-viewer mounts <TranscriptViewer runId={run.id} /> here
-                      (GET /runs/:id/transcript → Shiki-highlighted view). */}
-                  {run.transcript_path && (
-                    <p className="muted small">Transcript recorded — rich viewer arrives in the next task.</p>
-                  )}
+                  <MinutesPanel run={run} />
+                  {run.transcript_path && <TranscriptViewer runId={run.id} />}
                 </div>
               ))}
             </section>

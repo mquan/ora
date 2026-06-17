@@ -8,7 +8,7 @@
  *    and the daemon's message; an unreachable daemon becomes a `NetworkError`. Callers render these visibly.
  */
 
-import type { GregorianEvent, Run, CreateEventBody } from "./types";
+import type { GregorianEvent, Run, CreateEventBody, TranscriptResult } from "./types";
 
 const TOKEN_KEY = "gregorian.token";
 
@@ -88,6 +88,12 @@ export function listRuns(): Promise<{ runs: Run[] }> {
 
 export function getEvent(id: string): Promise<{ event: GregorianEvent; runs: Run[] }> {
   return request(`/events/${encodeURIComponent(id)}`, { headers: authHeaders() });
+}
+
+/** One run's normalized transcript. The route keys on the run `id` (store.getRun); 404 only for an
+ *  unknown id, while a degraded read returns 200 with `transcript.reason` set. */
+export function getTranscript(runId: string): Promise<{ transcript: TranscriptResult }> {
+  return request(`/runs/${encodeURIComponent(runId)}/transcript`, { headers: authHeaders() });
 }
 
 export function createEvent(body: CreateEventBody): Promise<{ event: GregorianEvent }> {

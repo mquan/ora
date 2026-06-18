@@ -44,7 +44,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=20 <23"
+    "node": "20.x || 22.x || 23.x || 24.x || 25.x || 26.x"
   },
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",

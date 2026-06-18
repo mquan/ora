@@ -22,7 +22,7 @@ describe("checkNativeModules", () => {
     });
     expect(result.ok).toBe(false);
     if (result.ok) return; // narrow for the type checker
-    expect(result.message).toContain(">=20 <23");
+    expect(result.message).toContain("20, 22-26");
     expect(result.message).toMatch(/Node/);
     expect(result.message).toMatch(/npm rebuild better-sqlite3/);
     // Only the cause's first line is included — no `    at ...` stack frames leak through.

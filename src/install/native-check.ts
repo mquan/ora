@@ -1,8 +1,9 @@
 /**
  * First-run guard for the better-sqlite3 native module.
  *
- * better-sqlite3 ships prebuilt binaries only for the pinned Node range (`>=20 <23`). On an
- * unsupported Node (or a wrong-arch/ABI prebuild), loading it throws `ERR_DLOPEN_FAILED` — and because
+ * better-sqlite3 ships prebuilt binaries only for the Node range it declares (`20, 22-26`, matching
+ * better-sqlite3's own `engines`). On an unsupported Node (or a wrong-arch/ABI prebuild), loading it
+ * throws `ERR_DLOPEN_FAILED` — and because
  * `store.ts` imports it at module top-level, that throw would surface as a raw stack trace at
  * module-evaluation time, before the CLI's `main()` ever runs. The CLI entry therefore loads its
  * command modules lazily and runs this check FIRST, turning that crash into a friendly, named message.
@@ -12,8 +13,9 @@
 
 import { createRequire } from "node:module";
 
-/** The Node range better-sqlite3 publishes prebuilt binaries for (kept in sync with package.json engines). */
-const SUPPORTED_NODE = ">=20 <23";
+/** The Node range better-sqlite3 publishes prebuilt binaries for (kept in sync with package.json
+ *  `engines`, which mirrors better-sqlite3's own `engines`: 20.x, 22.x–26.x — Node 21 is EOL/unlisted). */
+const SUPPORTED_NODE = "20, 22-26";
 
 export type NativeCheckResult = { ok: true } | { ok: false; message: string };
 

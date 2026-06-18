@@ -18,13 +18,15 @@ import { randomUUID } from "node:crypto";
 
 import type { Store } from "../store/store.js";
 import type { EngineKind, Event, Run } from "../types.js";
+import { isPendingSession, pendingSession } from "../types.js";
 import type { AgentEngine, RunHandle } from "../engines/types.js";
 import { ClaudeEngine } from "../engines/claude.js";
+import { CodexEngine } from "../engines/codex.js";
 
-/** Thrown when an event names an engine m1 can't launch (codex arrives in m3). Never a silent skip. */
+/** Thrown when an event names an engine no adapter is registered for. Never a silent skip. */
 export class UnsupportedEngineError extends Error {
   constructor(engine: string) {
-    super(`engine '${engine}' is not supported yet (m1 launches claude only; codex lands in m3)`);
+    super(`engine '${engine}' is not supported (no adapter registered)`);
     this.name = "UnsupportedEngineError";
   }
 }
@@ -32,11 +34,13 @@ export class UnsupportedEngineError extends Error {
 /** Maps an {@link EngineKind} to its concrete adapter. Injected so tests can stub the launch. */
 export type EngineResolver = (engine: EngineKind) => AgentEngine;
 
-/** Default resolver: a single shared {@link ClaudeEngine}; anything else → {@link UnsupportedEngineError}. */
+/** Default resolver: shared {@link ClaudeEngine} + {@link CodexEngine}; anything else → {@link UnsupportedEngineError}. */
 export function defaultEngineResolver(): EngineResolver {
   const claude = new ClaudeEngine();
+  const codex = new CodexEngine();
   return (engine) => {
     if (engine === "claude") return claude;
+    if (engine === "codex") return codex;
     throw new UnsupportedEngineError(engine);
   };
 }
@@ -131,8 +135,34 @@ export class Scheduler {
    */
   async fire(event: Event): Promise<void> {
     this.jobs.delete(event.id); // one-shot consumed
-    const sessionId = randomUUID();
-    this.logger.log(`firing event ${event.id} (${event.engine}) → session ${sessionId}`);
+    const realId = randomUUID();
+
+    // Resolve the engine BEFORE writing the run, since whether it pre-assigns the session id decides the
+    // row's `session_id`. A resolve failure (unknown engine) still records a failed run — never invisible.
+    let engine: AgentEngine;
+    try {
+      engine = this.resolveEngine(event.engine);
+    } catch (err) {
+      const run = this.store.createRun({
+        event_id: event.id,
+        engine: event.engine,
+        session_id: realId,
+        role: "run",
+        status: "running",
+        started_at: new Date().toISOString(),
+      });
+      this.store.updateEvent(event.id, { status: "running" });
+      this.failRun(run.id, event.id, `engine start failed: ${(err as Error).message}`);
+      return;
+    }
+
+    // claude pre-assigns its session id (the transcript join key); codex cannot, so it gets a `pending:`
+    // placeholder and the watcher backfills the real rollout id when the transcript appears.
+    const preassigns = engine.preassignsSessionId !== false;
+    const sessionId = preassigns ? realId : pendingSession(realId);
+    this.logger.log(
+      `firing event ${event.id} (${event.engine}) → ${preassigns ? `session ${sessionId}` : `pending ${sessionId}`}`,
+    );
 
     const run = this.store.createRun({
       event_id: event.id,
@@ -146,12 +176,9 @@ export class Scheduler {
 
     let handle: RunHandle;
     try {
-      handle = await this.resolveEngine(event.engine).start(event, {
-        sessionId,
-        beforeSnapshot: true,
-      });
+      handle = await engine.start(event, { sessionId: realId, beforeSnapshot: true });
     } catch (err) {
-      // Resolve/spawn failed before a handle existed (unsupported engine, missing binary, bad cwd).
+      // Spawn failed before a handle existed (missing binary, bad cwd).
       this.failRun(run.id, event.id, `engine start failed: ${(err as Error).message}`);
       return;
     }
@@ -161,29 +188,75 @@ export class Scheduler {
       this.logger.log(`daemon stopping; deferring finalize of run ${run.id} to m2 reconcile`);
       return;
     }
+
+    if (preassigns) {
+      this.finalizePreassigned(run.id, event.id, result);
+    } else {
+      this.finalizePending(run.id, event.id, result);
+    }
+  }
+
+  /**
+   * Finalize a run whose engine pre-assigned its session id (claude): the daemon-alive path. The run row
+   * already carries the correct `session_id` = transcript filename, so writing the terminal state here is
+   * safe even though the watcher may also finalize the same run (its `getRunBySession` finds the row and
+   * skips a terminal one). Triggers minutes (idempotent via the `run.minutes` guard).
+   */
+  private finalizePreassigned(
+    runId: string,
+    eventId: string,
+    result: { exitCode: number | null; transcriptPath: string | null; diffStat: string | null },
+  ): void {
     try {
       const status = result.exitCode === 0 ? "done" : "failed";
-      this.store.updateRun(run.id, {
+      this.store.updateRun(runId, {
         status,
         exit_code: result.exitCode,
         transcript_path: result.transcriptPath,
         diff_stat: result.diffStat,
         ended_at: new Date().toISOString(),
       });
-      this.store.updateEvent(event.id, { status });
+      this.store.updateEvent(eventId, { status });
       this.logger.log(
-        `event ${event.id} ${status} (exit ${result.exitCode}) transcript ${result.transcriptPath ?? "—"}`,
+        `event ${eventId} ${status} (exit ${result.exitCode}) transcript ${result.transcriptPath ?? "—"}`,
       );
-
-      // R1: trigger minutes on this finalize path. The watcher's idle finalize may also fire for the
-      // same run — minutes generation is idempotent (run.minutes guard), so whichever wins is fine.
       if (this.onFinalize) {
-        const finalized = this.store.getRun(run.id);
+        const finalized = this.store.getRun(runId);
         if (finalized) this.onFinalize(finalized);
       }
     } catch (err) {
       // e.g. Store closed mid-finalize (shutdown race) — log, never crash the daemon.
-      this.logger.error(`failed to finalize run ${run.id}: ${(err as Error).message}`);
+      this.logger.error(`failed to finalize run ${runId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Finalize a run whose engine cannot pre-assign its session id (codex). We CANNOT mark it done here:
+   * the run row is still a `pending:` placeholder with no transcript path or real id — only the watcher,
+   * reading the rollout, can correlate and finalize it (status running → done on idle). So we only STASH
+   * what the detached child told us (exit code + diff) by run id, leaving status/session_id/transcript to
+   * the watcher; minutes fire on the watcher's finalize. The one terminal case we own: a spawn/signal
+   * failure (`exitCode === null`) on a row STILL pending (the watcher never attached) means no rollout
+   * will ever correlate → fail it loudly with a named reason.
+   */
+  private finalizePending(
+    runId: string,
+    eventId: string,
+    result: { exitCode: number | null; diffStat: string | null },
+  ): void {
+    try {
+      const current = this.store.getRun(runId);
+      if (result.exitCode === null && current && isPendingSession(current.session_id)) {
+        this.failRun(runId, eventId, "engine start failed: codex exited without a transcript (signal/spawn error)");
+        return;
+      }
+      // Additive stash by id — never touches status, session_id, or transcript_path (the watcher owns those).
+      this.store.updateRun(runId, { exit_code: result.exitCode, diff_stat: result.diffStat });
+      this.logger.log(
+        `event ${eventId} codex run ${runId} exited (exit ${result.exitCode}); awaiting watcher rollout attach`,
+      );
+    } catch (err) {
+      this.logger.error(`failed to record codex exit for run ${runId}: ${(err as Error).message}`);
     }
   }
 

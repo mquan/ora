@@ -39,14 +39,14 @@
  * dedup invariant hold even under rapid back-to-back events.
  */
 
-import { mkdirSync, statSync } from "node:fs";
-import { sep } from "node:path";
+import { mkdirSync, realpathSync, statSync } from "node:fs";
+import { resolve, sep } from "node:path";
 
 import { watch, type FSWatcher } from "chokidar";
 
 import type { Store } from "../store/store.js";
 import type { AgentEngine } from "../engines/types.js";
-import type { Run, RunUpdate } from "../types.js";
+import type { EngineKind, Run, RunUpdate } from "../types.js";
 
 /** Default idle window before a session with no new transcript writes is finalized. */
 export const DEFAULT_IDLE_MS = 60_000;
@@ -166,6 +166,27 @@ export class Watcher {
       const { sessionId, cwd } = identity;
       const existing = this.store.getRunBySession(sessionId);
 
+      if (!existing && cwd !== null) {
+        // Before ad-hoc discovery: a LAUNCHED run of an engine that can't pre-assign its session id
+        // (codex) was recorded as a `pending:` row keyed on cwd + spawn time, NOT this rollout's real
+        // id — so `getRunBySession` missed it. Claim it here and re-attach, rather than double-recording
+        // the same session as a fresh ad-hoc run. Engine-agnostic: claude never writes pending rows, so
+        // this is a no-op for claude.
+        const claimed = this.tryClaimPendingLaunchedRun(
+          engine.id,
+          cwd,
+          sessionId,
+          identity.startedAt,
+          path,
+          size,
+        );
+        if (claimed) {
+          this.reattach(claimed, path, size);
+          this.armIdle(sessionId, path);
+          return;
+        }
+      }
+
       if (existing) {
         if (existing.role === "summarizer") {
           // Self-ingestion guard: gregorian's own minutes pass — never record it.
@@ -224,6 +245,56 @@ export class Watcher {
     if (size > run.transcript_offset) patch.transcript_offset = size;
     if (Object.keys(patch).length > 0) this.store.updateRun(run.id, patch);
     this.logger.log(`re-attached run ${run.id} (session ${run.session_id}) at offset ${Math.max(size, run.transcript_offset)}`);
+  }
+
+  /**
+   * Try to claim a pending LAUNCHED run for this rollout — the watcher half of the pending-row +
+   * spawn-window match (design "LOCKED DESIGN DECISION"). Among `engine`'s pending runs (sentinel
+   * `session_id`, still running), pick those whose event cwd equals the rollout's cwd (realpath-compared,
+   * so `/tmp` ↔ `/private/tmp` matches) and whose spawn time is no later than the rollout's start. On a
+   * match, backfill the run's real `session_id` + transcript path/offset and return the refreshed row;
+   * the caller re-attaches it. Returns `undefined` when nothing matches (→ genuine ad-hoc).
+   *
+   * Concurrency edge: if ≥2 pending runs match the same cwd+window, attribution is ambiguous — we attach
+   * the earliest-spawned and LOG LOUDLY (never silently mis-attribute). Deterministic multi-run
+   * attribution is owned by the separate codex-hardening task.
+   */
+  private tryClaimPendingLaunchedRun(
+    engineId: EngineKind,
+    cwd: string,
+    sessionId: string,
+    startedAt: string | undefined,
+    path: string,
+    size: number,
+  ): Run | undefined {
+    const pending = this.store.listPendingLaunchedRuns(engineId);
+    if (pending.length === 0) return undefined;
+
+    const rolloutCwd = canonicalPath(cwd);
+    // listPendingLaunchedRuns is ordered by started_at,id, and filter preserves order → earliest first.
+    const matches = pending.filter((run) => {
+      const event = this.store.getEvent(run.event_id);
+      if (!event) return false;
+      if (canonicalPath(event.cwd) !== rolloutCwd) return false;
+      // Spawn-window guard: a rollout that started before the run was spawned cannot be that run.
+      if (startedAt && run.started_at && startedAt < run.started_at) return false;
+      return true;
+    });
+    if (matches.length === 0) return undefined;
+
+    if (matches.length > 1) {
+      this.logger.error(
+        `ambiguous ${engineId} correlation: ${matches.length} pending runs match cwd=${cwd} for ` +
+          `session ${sessionId}; attaching earliest run ${matches[0]!.id}. ` +
+          `TODO(codex-hardening): deterministic same-cwd-window attribution`,
+      );
+    }
+    const target = matches[0]!;
+    const claimed = this.store.attachLaunchedRun(target.id, sessionId, path, size);
+    this.logger.log(
+      `claimed pending ${engineId} run ${target.id} (event ${target.event_id}) → session ${sessionId} cwd=${cwd}`,
+    );
+    return claimed;
   }
 
   /**
@@ -363,6 +434,19 @@ export class Watcher {
       }
     }
     return undefined;
+  }
+}
+
+/**
+ * Resolve a path to its real, symlink-free absolute form for cwd equality — so a run launched in
+ * `/tmp/x` (lexically stored on the event) matches a rollout whose `session_meta.cwd` is the realpath
+ * `/private/tmp/x`. Falls back to a lexical `resolve` when the path no longer exists (best-effort).
+ */
+function canonicalPath(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return resolve(p);
   }
 }
 

@@ -19,6 +19,7 @@
 import { statSync } from "node:fs";
 
 import type { Store } from "../store/store.js";
+import { isPendingSession } from "../types.js";
 import { consoleLogger, type EngineResolver, type Logger, type Scheduler } from "./scheduler.js";
 import type { Watcher } from "../watcher/watcher.js";
 import { materializeRecurrences } from "./recurrence.js";
@@ -66,6 +67,14 @@ export function reconcile(deps: ReconcileDeps): ReconcileSummary {
   // 1 + 2: sweep running runs (only the running set — small even after a crash).
   for (const run of store.listRuns().filter((r) => r.status === "running")) {
     try {
+      if (isPendingSession(run.session_id)) {
+        // A launched codex run still awaiting its rollout (no real id, no transcript path yet). It has no
+        // predictable path to re-attach by, and it is NOT lost — the watcher will claim it once the
+        // rollout appears. Leave it running. (Cleanup of a spawn-failed pending row that never produces a
+        // rollout is owned by the codex-hardening task — TODO.)
+        logger.log(`reconcile: run ${run.id} awaiting codex rollout (pending) — left running`);
+        continue;
+      }
       if (run.role === "summarizer") {
         // 2: orphaned summarizer guard — mark terminal so it never lingers.
         store.updateRun(run.id, {

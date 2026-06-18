@@ -1,0 +1,11 @@
+{"timestamp":"2026-06-18T06:29:16.634Z","type":"session_meta","payload":{"id":"019ed96b-6c9a-7631-a7f3-28d40d27c3e5","timestamp":"2026-06-18T06:29:16.570Z","cwd":"/private/tmp/codex-probe","originator":"codex_exec","cli_version":"0.141.0","source":"exec","base_instructions":{"text":"You are Codex, a coding agent. (trimmed for fixture)"}}}
+{"timestamp":"2026-06-18T06:29:16.700Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"<permissions instructions> read-only"}]}}
+{"timestamp":"2026-06-18T06:29:16.800Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"list the files"}]}}
+{"timestamp":"2026-06-18T06:29:17.000Z","type":"event_msg","payload":{"type":"user_message","message":"list the files","images":[]}}
+{"timestamp":"2026-06-18T06:29:17.100Z","type":"turn_context","payload":{"turn_id":"t1","cwd":"/private/tmp/codex-probe","model":"gpt-5"}}
+{"timestamp":"2026-06-18T06:29:17.500Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"I should run ls."}]}}
+{"timestamp":"2026-06-18T06:29:17.800Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\"command\":[\"bash\",\"-lc\",\"ls\"]}"}}
+{"timestamp":"2026-06-18T06:29:18.100Z","type":"response_item","payload":{"type":"function_call_output","output":"a.txt\nb.txt"}}
+{"timestamp":"2026-06-18T06:29:18.600Z","type":"event_msg","payload":{"type":"agent_message","message":"There are two files."}}
+{"timestamp":"2026-06-18T06:29:18.700Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"There are two files: a.txt and b.txt."}]}}
+{"timestamp":"2026-06-18T06:29:18.900Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"t1","duration_ms":1682}}

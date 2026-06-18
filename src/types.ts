@@ -13,6 +13,27 @@ export const GREGORIAN = "gregorian" as const;
 export type EngineKind = "claude" | "codex";
 
 /**
+ * Sentinel prefix for a LAUNCHED run whose engine cannot pre-assign the transcript session id
+ * (codex: the rollout UUID is codex-chosen, learned only when the file appears). The scheduler writes
+ * `pending:<uuid>` as a placeholder `session_id` so the NOT-NULL + UNIQUE `session_id` index still
+ * holds; the watcher claims such a row when the real rollout appears and backfills the true id. A real
+ * engine session id is never of this shape, so `getRunBySession(<realId>)` can never collide with a
+ * pending row. Shared here (zero new import edges) by scheduler (writes), store (queries), watcher
+ * (claims), and reconcile (skips).
+ */
+export const PENDING_SESSION_PREFIX = "pending:";
+
+/** Build a pending-launch placeholder `session_id` from a freshly-generated uuid. */
+export function pendingSession(uuid: string): string {
+  return `${PENDING_SESSION_PREFIX}${uuid}`;
+}
+
+/** Whether a `session_id` is a not-yet-correlated pending-launch placeholder (see {@link PENDING_SESSION_PREFIX}). */
+export function isPendingSession(sessionId: string): boolean {
+  return sessionId.startsWith(PENDING_SESSION_PREFIX);
+}
+
+/**
  * A run's purpose. `run` is a user-facing agent run the watcher records; `summarizer`
  * is gregorian's own `claude -p` minutes pass, which the watcher skips (self-ingestion guard).
  */

@@ -23,8 +23,10 @@ export default defineConfig({
     },
   },
   test: {
-    // Pure helpers only — no DOM needed. Component interaction is covered by the browser QA phase.
+    // Node env, no DOM. Pure helpers are unit-tested here; component interaction is covered by browser QA.
+    // The one component test (Markdown.test.tsx) renders via react-dom/server's renderToStaticMarkup —
+    // synchronous and node-safe — so no jsdom is needed. `.tsx` is included for that file.
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 });

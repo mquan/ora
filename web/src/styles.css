@@ -758,3 +758,113 @@ body {
     background-color: var(--shiki-dark-bg);
   }
 }
+
+/* ── Rendered markdown (agent-authored prose: message bodies + minutes) ──────────
+   Lives inside detail panels and <details>, so type is scaled down and wide content
+   (code, tables) scrolls rather than stretching the panel. The `.markdown` rules come
+   after `.t-text` so they win for the shared wrapper element (resets pre-wrap). */
+.markdown {
+  font-size: 0.85rem;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.5;
+}
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+.markdown p {
+  margin: 0 0 0.5rem;
+}
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  margin: 0.8rem 0 0.4rem;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.markdown h1 {
+  font-size: 1.1rem;
+}
+.markdown h2 {
+  font-size: 1rem;
+}
+.markdown h3 {
+  font-size: 0.92rem;
+}
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-size: 0.85rem;
+}
+.markdown ul,
+.markdown ol {
+  margin: 0 0 0.5rem;
+  padding-left: 1.4rem;
+}
+.markdown li {
+  margin: 0.15rem 0;
+}
+.markdown li > input[type="checkbox"] {
+  margin-right: 0.35rem;
+}
+.markdown a {
+  color: var(--accent);
+}
+.markdown blockquote {
+  margin: 0 0 0.5rem;
+  padding-left: 0.7rem;
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+}
+.markdown hr {
+  border: none;
+  border-top: 1px solid var(--line-soft);
+  margin: 0.8rem 0;
+}
+/* Inline code + fenced blocks: reuse the surface tone of .text-block. */
+.markdown code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  background: var(--line-soft);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+}
+.markdown pre {
+  margin: 0 0 0.5rem;
+  background: var(--line-soft);
+  border-radius: 8px;
+  padding: 0.6rem;
+  max-height: 22rem;
+  overflow: auto;
+}
+.markdown pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.8rem;
+  white-space: pre;
+}
+/* GFM tables: scroll horizontally instead of stretching the panel. */
+.markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+}
+.markdown th,
+.markdown td {
+  border: 1px solid var(--line);
+  padding: 0.3rem 0.5rem;
+  text-align: left;
+}
+.markdown th {
+  background: var(--line-soft);
+  font-weight: 600;
+}

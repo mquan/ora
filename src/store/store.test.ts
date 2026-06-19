@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { Store } from "./store.js";
+import { pendingSession } from "../types.js";
 import type { NewEvent, NewRecurrenceRule, NewRun } from "../types.js";
 
 let dbPath: string;
@@ -159,5 +160,50 @@ describe("Store: run", () => {
 
   it("enforces the event_id foreign key", () => {
     expect(() => store.createRun(newRun("no-such-event"))).toThrow(/FOREIGN KEY/i);
+  });
+});
+
+describe("pending launched-run correlation (codex)", () => {
+  it("lists only running, role=run, pending-session runs for the given engine — oldest first", () => {
+    const ev = store.createEvent(newEvent({ engine: "codex", cwd: "/work/x" }));
+    const pendingA = store.createRun(
+      newRun(ev.id, { engine: "codex", session_id: pendingSession("a"), started_at: "2026-01-01T00:00:01Z" }),
+    );
+    const pendingB = store.createRun(
+      newRun(ev.id, { engine: "codex", session_id: pendingSession("b"), started_at: "2026-01-01T00:00:00Z" }),
+    );
+    // Excluded: a real (already-correlated) codex run, a done pending run, a summarizer, a claude pending.
+    store.createRun(newRun(ev.id, { engine: "codex", session_id: "real-uuid" }));
+    store.createRun(newRun(ev.id, { engine: "codex", session_id: pendingSession("done"), status: "done" }));
+    store.createRun(newRun(ev.id, { engine: "codex", session_id: pendingSession("sum"), role: "summarizer" }));
+    store.createRun(newRun(ev.id, { engine: "claude", session_id: pendingSession("claude") }));
+
+    const pending = store.listPendingLaunchedRuns("codex");
+    // Oldest started_at first → B before A.
+    expect(pending.map((r) => r.id)).toEqual([pendingB.id, pendingA.id]);
+
+    // The query is engine-scoped: asking for "claude" returns only the claude pending row,
+    // never the codex ones. (In production the scheduler never creates claude pending rows —
+    // claude pre-assigns its session id — so this list is empty in practice; the store method
+    // itself just filters by the engine argument.)
+    expect(store.listPendingLaunchedRuns("claude").map((r) => r.session_id)).toEqual([
+      pendingSession("claude"),
+    ]);
+  });
+
+  it("attachLaunchedRun backfills the real session id + transcript path/offset, dropping the placeholder", () => {
+    const ev = store.createEvent(newEvent({ engine: "codex", cwd: "/work/x" }));
+    const sentinel = pendingSession("xyz");
+    const run = store.createRun(newRun(ev.id, { engine: "codex", session_id: sentinel }));
+
+    const attached = store.attachLaunchedRun(run.id, "real-codex-uuid", "/codex/rollout.jsonl", 4096);
+
+    expect(attached?.session_id).toBe("real-codex-uuid");
+    expect(attached?.transcript_path).toBe("/codex/rollout.jsonl");
+    expect(attached?.transcript_offset).toBe(4096);
+    expect(store.getRunBySession("real-codex-uuid")?.id).toBe(run.id);
+    expect(store.getRunBySession(sentinel)).toBeUndefined();
+    // No longer pending after correlation.
+    expect(store.listPendingLaunchedRuns("codex")).toHaveLength(0);
   });
 });

@@ -17,6 +17,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -30,6 +31,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Watcher } from "./watcher.js";
 import { readTranscriptCwd } from "../engines/claude.js";
 import { Store } from "../store/store.js";
+import { pendingSession } from "../types.js";
 import type { AgentEngine, TranscriptEvent, TranscriptIdentity } from "../engines/types.js";
 
 /** A silent logger — keeps test output clean while still exercising the log calls. */
@@ -414,3 +416,171 @@ async function waitFor(cond: () => boolean | undefined, timeoutMs: number): Prom
     await new Promise((r) => setTimeout(r, 20));
   }
 }
+
+/**
+ * Pending-launch claim (codex): a launched codex run is recorded as a `pending:` row keyed on cwd +
+ * spawn time, NOT the rollout's real id. When the rollout appears, the watcher must CLAIM that pending
+ * row (backfill the real id, re-attach) instead of double-recording the session as a fresh ad-hoc run.
+ *
+ * A `FakeCodexEngine` over a temp root reads cwd + startedAt from a written `session_meta`-shaped first
+ * line — exactly the seam the real {@link import("../engines/codex.js").CodexEngine} implements — so the
+ * watcher's engine-agnostic claim logic is exercised without `~/.codex` or a real codex binary.
+ */
+describe("pending-launch claim — codex correlation without double-record", () => {
+  /** A codex-shaped fake: id=codex, cannot pre-assign, identity carries cwd + startedAt from line 1. */
+  class FakeCodexEngine implements AgentEngine {
+    readonly id = "codex" as const;
+    readonly preassignsSessionId = false;
+    constructor(private readonly root: string) {}
+    transcriptRoots(): string[] {
+      return [this.root];
+    }
+    identifyTranscript(path: string): TranscriptIdentity | null {
+      if (!path.startsWith(this.root + sep) || !path.endsWith(".jsonl")) return null;
+      const sessionId = basename(path, ".jsonl");
+      let cwd: string | null = null;
+      let startedAt: string | undefined;
+      try {
+        const first = readFileSync(path, "utf8").split("\n")[0] ?? "";
+        if (first.trim()) {
+          const meta = JSON.parse(first) as { payload?: { cwd?: string; timestamp?: string } };
+          cwd = meta.payload?.cwd ?? null;
+          startedAt = meta.payload?.timestamp;
+        }
+      } catch {
+        // too-fresh / partial → cwd stays null (watcher defers), mirroring the real engine.
+      }
+      return { sessionId, cwd, startedAt };
+    }
+    resolveTranscriptPath(): string | null {
+      return null;
+    }
+    start(): Promise<never> {
+      throw new Error("FakeCodexEngine.start should not be called by the watcher");
+    }
+    // eslint-disable-next-line require-yield
+    async *parseTranscript(): AsyncIterable<TranscriptEvent> {
+      throw new Error("FakeCodexEngine.parseTranscript should not be called by the watcher");
+    }
+  }
+
+  let codexRoot: string;
+  let codexEngine: FakeCodexEngine;
+  let codexWatcher: Watcher;
+
+  beforeEach(() => {
+    codexRoot = mkdtempSync(join(tmpdir(), "greg-codex-root-"));
+    codexEngine = new FakeCodexEngine(codexRoot);
+    codexWatcher = new Watcher({
+      store,
+      engines: [codexEngine],
+      logger: silent,
+      idleMs: IDLE_MS,
+      now: () => NOW,
+    });
+  });
+
+  afterEach(() => {
+    rmSync(codexRoot, { recursive: true, force: true });
+  });
+
+  /** Pre-create a PENDING launched codex run exactly as `scheduler.fire` does for codex. */
+  function preCreatePendingCodex(cwd: string, startedAt = NOW): { eventId: string; runId: string; sentinel: string } {
+    const event = store.createEvent({
+      title: "scheduled codex run",
+      engine: "codex",
+      cwd,
+      prompt: "do the thing",
+      schedule_kind: "once",
+      scheduled_at: startedAt,
+      status: "running",
+    });
+    const sentinel = pendingSession(randomUUID());
+    const run = store.createRun({
+      event_id: event.id,
+      engine: "codex",
+      session_id: sentinel,
+      role: "run",
+      status: "running",
+      started_at: startedAt,
+    });
+    return { eventId: event.id, runId: run.id, sentinel };
+  }
+
+  /** Write a codex rollout `<root>/<realUuid>.jsonl` whose first line is a session_meta with cwd+ts. */
+  function writeRollout(realUuid: string, opts: { cwd?: string; startedAt?: string } = {}): { path: string; size: number } {
+    const path = join(codexRoot, `${realUuid}.jsonl`);
+    const lines: string[] = [];
+    if (opts.cwd !== undefined) {
+      lines.push(JSON.stringify({ type: "session_meta", payload: { id: realUuid, cwd: opts.cwd, timestamp: opts.startedAt ?? NOW } }));
+    }
+    lines.push(JSON.stringify({ type: "response_item", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "hi" }] } }));
+    writeFileSync(path, lines.join("\n") + "\n");
+    return { path, size: statSync(path).size };
+  }
+
+  it("CLAIMS the pending run on rollout-appearance: backfills the real id, no new event/run", () => {
+    const realUuid = "019ed96b-6c9a-7631-a7f3-28d40d27c3e5";
+    const { eventId, runId, sentinel } = preCreatePendingCodex("/work/x");
+    const { path, size } = writeRollout(realUuid, { cwd: "/work/x", startedAt: "2026-06-14T21:00:05.000Z" });
+
+    codexWatcher.handleFileEvent(path, "add", size);
+
+    // No double-record: still one run, one event.
+    expect(store.listRuns()).toHaveLength(1);
+    expect(store.listEvents()).toHaveLength(1);
+    // The pending placeholder is gone; the row now carries codex's real id + transcript.
+    expect(store.getRunBySession(sentinel)).toBeUndefined();
+    const claimed = store.getRunBySession(realUuid)!;
+    expect(claimed.id).toBe(runId);
+    expect(claimed.event_id).toBe(eventId);
+    expect(claimed.transcript_path).toBe(path);
+    expect(claimed.transcript_offset).toBe(size);
+    expect(claimed.status).toBe("running");
+
+    // Idle → finalized done, the scheduled event reads done (NOT a separate ad-hoc event).
+    vi.advanceTimersByTime(IDLE_MS);
+    expect(store.getRun(runId)!.status).toBe("done");
+    expect(store.getEvent(eventId)!.status).toBe("done");
+    expect(store.getEvent(eventId)!.schedule_kind).toBe("once");
+  });
+
+  it("falls back to ad-hoc discovery when NO pending run matches (genuine ad-hoc codex)", () => {
+    const realUuid = "019ed222-0000-7000-a000-000000000001";
+    const { path, size } = writeRollout(realUuid, { cwd: "/home/me/side", startedAt: NOW });
+
+    codexWatcher.handleFileEvent(path, "add", size);
+
+    const events = store.listEvents();
+    expect(events).toHaveLength(1);
+    expect(events[0]!.schedule_kind).toBe("adhoc");
+    expect(events[0]!.cwd).toBe("/home/me/side");
+    expect(store.getRunBySession(realUuid)!.engine).toBe("codex");
+  });
+
+  it("does NOT claim a pending run in a DIFFERENT cwd — discovers ad-hoc instead", () => {
+    const realUuid = "019ed333-0000-7000-a000-000000000002";
+    const { sentinel } = preCreatePendingCodex("/work/a");
+    const { path, size } = writeRollout(realUuid, { cwd: "/work/b", startedAt: "2026-06-14T21:00:05.000Z" });
+
+    codexWatcher.handleFileEvent(path, "add", size);
+
+    // The pending row is untouched; a fresh ad-hoc event+run was created instead.
+    expect(store.getRunBySession(sentinel)!.status).toBe("running");
+    expect(store.listRuns()).toHaveLength(2);
+    expect(store.listEvents()).toHaveLength(2);
+    expect(store.getRunBySession(realUuid)!.event_id).not.toBe(store.getRunBySession(sentinel)!.event_id);
+  });
+
+  it("does NOT claim when the rollout STARTED BEFORE the run was spawned (window guard)", () => {
+    const realUuid = "019ed444-0000-7000-a000-000000000003";
+    const { sentinel } = preCreatePendingCodex("/work/x", "2026-06-14T21:00:00.000Z");
+    // Rollout start is a minute BEFORE the spawn → cannot be this run → ad-hoc.
+    const { path, size } = writeRollout(realUuid, { cwd: "/work/x", startedAt: "2026-06-14T20:59:00.000Z" });
+
+    codexWatcher.handleFileEvent(path, "add", size);
+
+    expect(store.getRunBySession(sentinel)!.status).toBe("running"); // still pending
+    expect(store.listRuns()).toHaveLength(2);
+  });
+});

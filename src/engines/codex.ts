@@ -296,7 +296,7 @@ export class CodexEngine extends AgentAdapterBase {
    * known at launch. Always `null` — correlation flows through the watcher's pending-claim instead. (The
    * interface explicitly permits `null` here.)
    */
-  resolveTranscriptPath(_sessionId: string, _cwd: string): null {
+  resolveTranscriptPath(): null {
     return null;
   }
 
@@ -322,7 +322,7 @@ export class CodexEngine extends AgentAdapterBase {
    * unused — codex picks its own. Deliberately NOT set: `--ephemeral` (would skip the rollout the watcher
    * relies on) and `--json` (the base spawns detached with `stdio:"ignore"`, so stdout can't be captured).
    */
-  protected buildSpawn(event: Event, _sessionId: string): SpawnSpec {
+  protected buildSpawn(event: Event): SpawnSpec {
     const args = ["exec", "--skip-git-repo-check", "-s", "workspace-write"];
     if (event.model) args.push("-m", event.model);
     args.push(composePromptCodex(event));

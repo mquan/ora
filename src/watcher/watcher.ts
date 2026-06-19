@@ -115,8 +115,9 @@ export class Watcher {
    * not have `~/.claude/projects` yet). `ignoreInitial:true` — record only NEW activity from here
    * forward; the watcher must NOT replay the user's whole transcript history as ad-hoc runs at boot
    * (plan F1; boot re-attach of in-flight runs is reconcile's job). `alwaysStat:true` so `add`/`change`
-   * carry the byte size → `transcript_offset` with no extra `stat`. `depth:2` bounds the recursive
-   * watch (claude layout is `root/<slug>/<sessionId>.jsonl`).
+   * carry the byte size → `transcript_offset` with no extra `stat`. `depth:4` bounds the recursive
+   * watch while covering BOTH layouts: claude `root/<slug>/<sessionId>.jsonl` (1 dir deep) and codex
+   * `root/YYYY/MM/DD/rollout-*.jsonl` (3 dirs deep — empirically needs depth ≥ 3; 4 leaves margin).
    */
   async start(): Promise<void> {
     const roots = [...new Set(this.engines.flatMap((e) => e.transcriptRoots()))];
@@ -128,7 +129,7 @@ export class Watcher {
       }
     }
 
-    const w = watch(roots, { ignoreInitial: true, alwaysStat: true, depth: 2 });
+    const w = watch(roots, { ignoreInitial: true, alwaysStat: true, depth: 4 });
     w.on("add", (path, stats) => this.handleFileEvent(path, "add", stats?.size ?? 0));
     w.on("change", (path, stats) => this.handleFileEvent(path, "change", stats?.size ?? 0));
     w.on("unlink", (path) => this.handleUnlink(path));

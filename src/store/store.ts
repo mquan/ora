@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import Database from "better-sqlite3";
 
 import type {
+  EngineKind,
   Event,
   EventFilter,
   EventUpdate,
@@ -25,6 +26,7 @@ import type {
   Run,
   RunUpdate,
 } from "../types.js";
+import { PENDING_SESSION_PREFIX } from "../types.js";
 
 type DB = Database.Database;
 
@@ -315,6 +317,48 @@ export class Store {
       .prepare(`SELECT * FROM run WHERE event_id = ? ORDER BY started_at, id`)
       .all(eventId) as RunRow[];
     return rows.map((r) => this.mapRun(r));
+  }
+
+  /**
+   * Launched runs for `engine` still awaiting transcript correlation — `role='run'`, `status='running'`,
+   * and a `pending:` placeholder `session_id` (an engine that can't pre-assign the rollout id, i.e.
+   * codex). Oldest-spawned first. The watcher scans these to claim a freshly-appeared rollout BEFORE it
+   * would otherwise treat it as a brand-new ad-hoc session (the pending-row + spawn-window match). claude
+   * never writes such rows, so for claude this is always empty.
+   */
+  listPendingLaunchedRuns(engine: EngineKind): Run[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM run
+           WHERE engine = ? AND role = 'run' AND status = 'running' AND session_id LIKE ?
+           ORDER BY started_at, id`,
+      )
+      .all(engine, `${PENDING_SESSION_PREFIX}%`) as RunRow[];
+    return rows.map((r) => this.mapRun(r));
+  }
+
+  /**
+   * Claim a pending launched run: backfill its real `session_id` (replacing the `pending:` placeholder),
+   * `transcript_path`, and `transcript_offset` in one UPDATE, returning the refreshed row. The dedicated
+   * method (rather than widening `RunUpdate` with `session_id`) keeps `session_id` immutable across the
+   * general update surface — only the watcher's one-time pending→real correlation rewrites it. The real
+   * id is unique, so the UNIQUE `session_id` index is preserved.
+   */
+  attachLaunchedRun(
+    runId: string,
+    sessionId: string,
+    transcriptPath: string,
+    transcriptOffset: number,
+  ): Run | undefined {
+    this.db
+      .prepare(
+        `UPDATE run
+           SET session_id = @session_id, transcript_path = @transcript_path,
+               transcript_offset = @transcript_offset
+         WHERE id = @id`,
+      )
+      .run({ id: runId, session_id: sessionId, transcript_path: transcriptPath, transcript_offset: transcriptOffset });
+    return this.getRun(runId);
   }
 
   // --- mappers / helpers ---

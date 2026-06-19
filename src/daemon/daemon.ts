@@ -28,6 +28,7 @@ import { MinutesService } from "./minutes.js";
 import { reconcile } from "./reconcile.js";
 import { materializeRecurrences } from "./recurrence.js";
 import { ClaudeEngine } from "../engines/claude.js";
+import { CodexEngine } from "../engines/codex.js";
 import type { AgentEngine } from "../engines/types.js";
 import type { ClaudeRunner } from "../minutes/summarizer.js";
 import type { Run } from "../types.js";
@@ -68,7 +69,7 @@ export interface DaemonOptions {
   logger?: Logger;
   /** Override the engine resolver the scheduler launches with (tests inject a stub — no real `claude`). */
   engineResolver?: EngineResolver;
-  /** Engines whose transcript roots the watcher subscribes to. Defaults to `[new ClaudeEngine()]`. */
+  /** Engines whose transcript roots the watcher subscribes to. Defaults to `[ClaudeEngine, CodexEngine]`. */
   engines?: AgentEngine[];
   /** Watcher idle window (ms). Defaults to the watcher's own default (60s). */
   idleMs?: number;
@@ -99,7 +100,7 @@ export class Daemon {
     this.port = opts.port ?? Number(process.env.GREGORIAN_PORT ?? DEFAULT_PORT);
     this.logger = opts.logger ?? consoleLogger;
     this.engineResolver = opts.engineResolver ?? defaultEngineResolver();
-    this.engines = opts.engines ?? [new ClaudeEngine()];
+    this.engines = opts.engines ?? [new ClaudeEngine(), new CodexEngine()];
     this.idleMs = opts.idleMs;
     this.summarizerRunner = opts.summarizerRunner;
     this.graceMs = opts.graceMs;

@@ -23,6 +23,7 @@ import { Scheduler } from "./scheduler.js";
 import { Watcher } from "../watcher/watcher.js";
 import { reconcile } from "./reconcile.js";
 import { readTranscriptCwd } from "../engines/claude.js";
+import { pendingSession } from "../types.js";
 import type { AgentEngine, TranscriptEvent, TranscriptIdentity } from "../engines/types.js";
 
 const silent = { log: () => {}, error: () => {} };
@@ -141,6 +142,38 @@ describe("reconcile — in-flight re-attach (R2)", () => {
     expect(failed.status).toBe("failed");
     expect(failed.error).toContain("interrupted");
     expect(store.getEvent(eventId)!.status).toBe("failed");
+  });
+});
+
+describe("reconcile — pending codex launch (awaiting rollout)", () => {
+  it("LEAVES a pending launched codex run running — not re-attached, not interrupted", () => {
+    const event = store.createEvent({
+      title: "scheduled codex run",
+      engine: "codex",
+      cwd: "/work/repo",
+      prompt: "do the thing",
+      schedule_kind: "once",
+      scheduled_at: NOW_ISO,
+      status: "running",
+    });
+    const run = store.createRun({
+      event_id: event.id,
+      engine: "codex",
+      session_id: pendingSession(randomUUID()), // no real id, no transcript path yet
+      role: "run",
+      status: "running",
+      started_at: NOW_ISO,
+    });
+
+    const summary = runReconcile();
+
+    // Not counted as re-attached or interrupted — it's simply left for the watcher to claim later.
+    expect(summary.reattached).toBe(0);
+    expect(summary.interrupted).toBe(0);
+    const after = store.getRun(run.id)!;
+    expect(after.status).toBe("running");
+    expect(after.error).toBeNull();
+    expect(store.getEvent(event.id)!.status).toBe("running");
   });
 });
 

@@ -20,6 +20,15 @@ export interface AgentEngine {
   readonly id: EngineKind;
 
   /**
+   * Whether this engine pre-assigns the transcript correlation key at launch (claude's `--session-id`),
+   * letting the scheduler write the run row's real `session_id` up-front. OPTIONAL: `undefined`/`true`
+   * means yes (claude, and every legacy test stub — unchanged). `false` means the engine cannot pin the
+   * id (codex), so the scheduler records a `pending:` placeholder and the watcher backfills the real id
+   * when the rollout appears. The scheduler reads `engine.preassignsSessionId !== false`.
+   */
+  readonly preassignsSessionId?: boolean;
+
+  /**
    * Launch a run for `event`, DETACHED (own process group, survives a daemon restart), and
    * return a pollable handle. Where the engine supports it, `opts.sessionId` is pre-assigned as
    * the transcript correlation key (claude's `--session-id`). When `opts.beforeSnapshot` is set
@@ -74,6 +83,12 @@ export interface TranscriptIdentity {
    * event carries a non-null cwd, since cwd is required to create the event.
    */
   cwd: string | null;
+  /**
+   * The session's start time (ISO), when the transcript records one. OPTIONAL — claude leaves it unset;
+   * codex fills it from its `session_meta` line. Used only by the watcher's pending-launch claim as the
+   * spawn-window guard (a rollout that started before a pending run was spawned cannot be that run).
+   */
+  startedAt?: string;
 }
 
 /** Inputs to {@link AgentEngine.start}. */

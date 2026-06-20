@@ -52,6 +52,14 @@ import type { EngineKind, Run, RunUpdate } from "../types.js";
 export const DEFAULT_IDLE_MS = 60_000;
 
 /**
+ * Default confidence window for same-cwd codex correlation. When ≥2 pending launched runs for one cwd
+ * are awaiting a rollout and another candidate spawned within this many ms of the FIFO target, the
+ * attribution is flagged `correlation='ambiguous'`. File-event latency (ms) ≪ this (5s), so far-apart
+ * launches disambiguate reliably while near-simultaneous ones are always flagged. Injectable for tests.
+ */
+export const DEFAULT_AMBIGUITY_WINDOW_MS = 5_000;
+
+/**
  * Minimal logging seam. Structurally identical to the scheduler's `Logger`, but redeclared here so
  * the watcher stays self-contained (no import edge into the scheduler/daemon — the architecture keeps
  * the watcher's deps to Store + AgentEngine + chokidar only).
@@ -76,6 +84,12 @@ export interface WatcherDeps {
   logger?: Logger;
   /** Idle window in ms; defaults to {@link DEFAULT_IDLE_MS}. */
   idleMs?: number;
+  /**
+   * Confidence window in ms for same-cwd codex correlation; defaults to {@link DEFAULT_AMBIGUITY_WINDOW_MS}.
+   * Two same-cwd pending launches spawned within this window are treated as genuinely concurrent →
+   * `correlation='ambiguous'`. Injectable so tests can exercise both the far-apart and simultaneous branches.
+   */
+  ambiguityWindowMs?: number;
   /** ISO-timestamp source (`started_at`/`ended_at`); defaults to wall clock. Injectable for tests. */
   now?: () => string;
   /**
@@ -94,6 +108,7 @@ export class Watcher {
   private readonly engines: AgentEngine[];
   private readonly logger: Logger;
   private readonly idleMs: number;
+  private readonly ambiguityWindowMs: number;
   private readonly now: () => string;
   private readonly onFinalize?: (run: Run) => void;
 
@@ -106,6 +121,7 @@ export class Watcher {
     this.engines = deps.engines;
     this.logger = deps.logger ?? consoleLogger;
     this.idleMs = deps.idleMs ?? DEFAULT_IDLE_MS;
+    this.ambiguityWindowMs = deps.ambiguityWindowMs ?? DEFAULT_AMBIGUITY_WINDOW_MS;
     this.now = deps.now ?? (() => new Date().toISOString());
     this.onFinalize = deps.onFinalize;
   }
@@ -256,9 +272,17 @@ export class Watcher {
    * match, backfill the run's real `session_id` + transcript path/offset and return the refreshed row;
    * the caller re-attaches it. Returns `undefined` when nothing matches (→ genuine ad-hoc).
    *
-   * Concurrency edge: if ≥2 pending runs match the same cwd+window, attribution is ambiguous — we attach
-   * the earliest-spawned and LOG LOUDLY (never silently mis-attribute). Deterministic multi-run
-   * attribution is owned by the separate codex-hardening task.
+   * Concurrency (codex-hardening): the eligible candidates are sorted by spawn time (`started_at,id`) and
+   * the rollout claims the EARLIEST still-pending one (best-effort FIFO). When ≥2 eligible candidates were
+   * spawned within the confidence window (genuinely concurrent same-cwd launches whose order can't be
+   * trusted), or the rollout carries no `startedAt` to order against, the ENTIRE concurrent group is
+   * stamped `correlation='ambiguous'` — the claimed run directly, its still-pending siblings via
+   * {@link Store.markRunAmbiguous} so their own later claim stays flagged (sticky). The whole group is
+   * mutually uncertain, so every member carries the marker, not just the first claimed — the run is
+   * ALWAYS recorded (never lost) and the uncertain attribution is ALWAYS visible (never silently
+   * mis-attributed). Far-apart launches fall outside the window and attach cleanly with no marker. The
+   * single-candidate case is unflagged (byte-for-byte the pre-hardening behavior). claude never writes
+   * pending rows → this is a no-op for it.
    */
   private tryClaimPendingLaunchedRun(
     engineId: EngineKind,
@@ -283,19 +307,54 @@ export class Watcher {
     });
     if (matches.length === 0) return undefined;
 
-    if (matches.length > 1) {
+    const target = matches[0]!; // earliest-spawned eligible candidate (FIFO)
+    // Genuinely-concurrent same-cwd siblings: other eligible candidates spawned within the window (so
+    // FIFO order can't be trusted). Empty when this is the only candidate or the others are far enough
+    // apart to disambiguate by spawn time.
+    const siblings = matches.length > 1 ? this.concurrentSiblings(target, matches.slice(1), startedAt) : [];
+    // Ambiguous if there is a concurrent sibling now, OR this row was already flagged by an earlier
+    // sibling's claim (sticky) — the whole concurrent group is mutually uncertain, so every member is
+    // flagged, not just the first claimed (architecture: "BOTH flagged", never silently mis-attribute).
+    const ambiguous = siblings.length > 0 || target.correlation === "ambiguous";
+    if (siblings.length > 0) {
+      // Pre-flag the still-pending siblings so their own later claim stays ambiguous even though, by then,
+      // each is the sole remaining candidate for the cwd.
+      for (const sibling of siblings) this.store.markRunAmbiguous(sibling.id);
       this.logger.error(
-        `ambiguous ${engineId} correlation: ${matches.length} pending runs match cwd=${cwd} for ` +
-          `session ${sessionId}; attaching earliest run ${matches[0]!.id}. ` +
-          `TODO(codex-hardening): deterministic same-cwd-window attribution`,
+        `ambiguous ${engineId} correlation: ${siblings.length + 1} concurrent same-cwd launches (cwd=${cwd}) ` +
+          `awaiting rollouts; recorded session ${sessionId} as run ${target.id} (earliest-spawned, FIFO) ` +
+          `and flagged the whole group correlation=ambiguous — attribution is not certain.`,
       );
     }
-    const target = matches[0]!;
-    const claimed = this.store.attachLaunchedRun(target.id, sessionId, path, size);
+    const claimed = this.store.attachLaunchedRun(
+      target.id,
+      sessionId,
+      path,
+      size,
+      ambiguous ? "ambiguous" : null,
+    );
     this.logger.log(
-      `claimed pending ${engineId} run ${target.id} (event ${target.event_id}) → session ${sessionId} cwd=${cwd}`,
+      `claimed pending ${engineId} run ${target.id} (event ${target.event_id}) → session ${sessionId} ` +
+        `cwd=${cwd}${ambiguous ? " [ambiguous]" : ""}`,
     );
     return claimed;
+  }
+
+  /**
+   * The eligible candidates that are genuinely CONCURRENT with the FIFO target — i.e. their FIFO order
+   * relative to the target can't be trusted. That is the case when the rollout carries no `startedAt`
+   * (nothing to order against), the target itself has no spawn time, or a candidate was spawned within
+   * {@link ambiguityWindowMs} of the target. A candidate missing its own `started_at` is treated as
+   * concurrent (conservatively flagged). Far-apart launches fall outside the window → not returned →
+   * they disambiguate cleanly with no marker.
+   */
+  private concurrentSiblings(target: Run, others: Run[], rolloutStartedAt: string | undefined): Run[] {
+    if (rolloutStartedAt === undefined || !target.started_at) return others;
+    const targetMs = Date.parse(target.started_at);
+    return others.filter((e) => {
+      if (!e.started_at) return true;
+      return Math.abs(Date.parse(e.started_at) - targetMs) <= this.ambiguityWindowMs;
+    });
   }
 
   /**

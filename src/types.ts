@@ -107,6 +107,14 @@ export interface Run {
    * `gregorian list` (short) and `gregorian show` (full). Added by migration v2.
    */
   error: string | null;
+  /**
+   * Correlation-confidence marker, written ONLY when the watcher claims a pending launched run (codex)
+   * under concurrency. `null` = normal/unambiguous. `'ambiguous'` = ≥2 same-cwd launches were awaiting
+   * a rollout within the confidence window, so this run's attribution is best-effort FIFO and could be
+   * swapped with a sibling's — recorded (never lost), but flagged visibly (never silently mis-attributed).
+   * Surfaced in `gregorian list`/`show` and the web detail panel. Added by migration v3.
+   */
+  correlation: string | null;
 }
 
 /**
@@ -138,6 +146,7 @@ export type NewRun = Omit<
   | "diff_stat"
   | "minutes"
   | "error"
+  | "correlation"
 > &
   Partial<
     Pick<
@@ -151,6 +160,7 @@ export type NewRun = Omit<
       | "diff_stat"
       | "minutes"
       | "error"
+      | "correlation"
     >
   >;
 

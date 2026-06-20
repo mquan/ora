@@ -48,6 +48,7 @@ function mkRun(over: Partial<Run> = {}): Run {
     minutes: null,
     status: "done",
     error: null,
+    correlation: null,
     ...over,
   };
 }
@@ -89,6 +90,15 @@ describe("renderDetail (gregorian show)", () => {
     expect(out).toContain("(none generated)");
   });
 
+  it("surfaces an ambiguous-correlation warning, and omits it for a normal run", () => {
+    const event = mkEvent();
+    const flagged = renderDetail(event, [mkRun({ correlation: "ambiguous" })]);
+    expect(flagged).toContain("correlation: ambiguous");
+
+    const normal = renderDetail(event, [mkRun({ correlation: null })]);
+    expect(normal).not.toContain("correlation: ambiguous");
+  });
+
   it("prefers the role=run run and ignores the summarizer guard run", () => {
     const event = mkEvent();
     const real = mkRun({ minutes: "real minutes here" });
@@ -102,18 +112,26 @@ describe("renderDetail (gregorian show)", () => {
 });
 
 describe("renderTable (gregorian list)", () => {
-  it("has the ID + DUR + EXIT + ERROR columns and renders the run's duration", () => {
+  it("has the ID + DUR + EXIT + NOTES columns and renders the run's duration", () => {
     const event = mkEvent();
     const map = new Map<string, Run[]>([[event.id, [mkRun()]]]);
 
     const out = renderTable([event], map);
     const [header, row] = out.split("\n");
 
-    for (const col of ["ID", "WHEN", "ENGINE", "STATUS", "DUR", "EXIT", "TITLE", "ERROR"]) {
+    for (const col of ["ID", "WHEN", "ENGINE", "STATUS", "DUR", "EXIT", "TITLE", "NOTES"]) {
       expect(header).toContain(col);
     }
     expect(row).toContain("abcdef12"); // 8-char short id
     expect(row).toContain("3.0s"); // duration
+  });
+
+  it("flags an ambiguous-correlation run in the NOTES column", () => {
+    const event = mkEvent();
+    const map = new Map<string, Run[]>([[event.id, [mkRun({ correlation: "ambiguous" })]]]);
+
+    const row = renderTable([event], map).split("\n")[1]!;
+    expect(row).toContain("ambiguous correlation");
   });
 
   it("filters the summarizer guard run — the displayed run is the role=run", () => {

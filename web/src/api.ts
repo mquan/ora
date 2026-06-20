@@ -8,7 +8,7 @@
  *    and the daemon's message; an unreachable daemon becomes a `NetworkError`. Callers render these visibly.
  */
 
-import type { GregorianEvent, Run, CreateEventBody, TranscriptResult } from "./types";
+import type { GregorianEvent, Run, CreateEventBody, TranscriptResult, EngineInfo } from "./types";
 
 const TOKEN_KEY = "gregorian.token";
 
@@ -94,6 +94,12 @@ export function getEvent(id: string): Promise<{ event: GregorianEvent; runs: Run
  *  unknown id, while a degraded read returns 200 with `transcript.reason` set. */
 export function getTranscript(runId: string): Promise<{ transcript: TranscriptResult }> {
   return request(`/runs/${encodeURIComponent(runId)}/transcript`, { headers: authHeaders() });
+}
+
+/** The engine registry (engine-scoped model pickers). Unauthenticated on the daemon, but sending the
+ *  bearer header is harmless; callers fall back to a built-in list if this fails. */
+export function getEngines(): Promise<{ engines: EngineInfo[] }> {
+  return request("/engines", { headers: authHeaders() });
 }
 
 export function createEvent(body: CreateEventBody): Promise<{ event: GregorianEvent }> {

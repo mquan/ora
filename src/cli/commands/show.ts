@@ -39,6 +39,13 @@ export function renderDetail(event: Event, runs: Run[]): string {
   field("transcript", run?.transcript_path ?? "—");
   if (event.prompt) field("prompt", event.prompt);
 
+  if (run?.correlation === "ambiguous") {
+    lines.push(
+      "",
+      "⚠ correlation: ambiguous — ≥2 concurrent same-cwd launches were awaiting a transcript; this " +
+        "run's attribution is best-effort (FIFO) and could be swapped with a sibling run.",
+    );
+  }
   if (run?.error) {
     lines.push("", "error:", run.error);
   }

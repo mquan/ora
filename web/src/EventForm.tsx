@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { createEvent, ApiError, NetworkError } from "./api";
-import type { Engine, CreateEventBody } from "./types";
+import { createEvent, getEngines, ApiError, NetworkError } from "./api";
+import type { Engine, CreateEventBody, EngineModelChoice } from "./types";
 
 /**
  * Create a scheduled run. The daemon exposes only `POST /events` (no edit endpoint yet), so this form is
@@ -11,15 +11,19 @@ import type { Engine, CreateEventBody } from "./types";
 
 const SENTINEL_DEFAULT = "__default__";
 
-/** Engine-scoped model choices. No model API exists, so these are curated; "Custom…" allows any string. */
-const MODELS: Record<Engine, { value: string; label: string }[]> = {
+const DEFAULT_OPTION: EngineModelChoice = { value: SENTINEL_DEFAULT, label: "Default (CLI default)" };
+
+/**
+ * Built-in FALLBACK model choices, used only if `GET /engines` is unreachable. The daemon's engine
+ * registry is the source of truth (fetched on mount); these mirror it so the form still works offline.
+ */
+const FALLBACK_MODELS: Record<Engine, EngineModelChoice[]> = {
   claude: [
-    { value: SENTINEL_DEFAULT, label: "Default (CLI default)" },
     { value: "opus", label: "opus" },
     { value: "sonnet", label: "sonnet" },
     { value: "haiku", label: "haiku" },
   ],
-  codex: [{ value: SENTINEL_DEFAULT, label: "Default (CLI default)" }],
+  codex: [],
 };
 
 const CUSTOM = "__custom__";
@@ -45,6 +49,9 @@ export function EventForm({ onClose, onCreated }: EventFormProps) {
   const [title, setTitle] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Engine→models from the daemon registry (single source of truth). Seeded with the built-in fallback so
+  // the form is usable before the fetch resolves and if it fails outright.
+  const [modelsByEngine, setModelsByEngine] = useState<Record<Engine, EngineModelChoice[]>>(FALLBACK_MODELS);
 
   // Close on Escape.
   useEffect(() => {
@@ -55,7 +62,26 @@ export function EventForm({ onClose, onCreated }: EventFormProps) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const models = MODELS[engine];
+  // Load the engine registry once. On any failure we keep the built-in fallback (no regression).
+  useEffect(() => {
+    let active = true;
+    getEngines()
+      .then(({ engines }) => {
+        if (!active) return;
+        const next: Record<Engine, EngineModelChoice[]> = { ...FALLBACK_MODELS };
+        for (const e of engines) next[e.id] = e.models;
+        setModelsByEngine(next);
+      })
+      .catch(() => {
+        /* keep FALLBACK_MODELS — the form still works offline */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // The Model <select> options: always a "Default" sentinel first, then the engine's curated models.
+  const models = [DEFAULT_OPTION, ...(modelsByEngine[engine] ?? [])];
 
   const resolveModel = (): string | null => {
     if (modelChoice === SENTINEL_DEFAULT) return null;

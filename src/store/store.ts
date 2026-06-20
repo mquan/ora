@@ -47,6 +47,12 @@ const MIGRATIONS: ReadonlyArray<(db: DB) => void> = [
     db.exec("ALTER TABLE run ADD COLUMN error TEXT");
     db.exec("CREATE INDEX IF NOT EXISTS idx_event_recurrence ON event(recurrence_rule_id)");
   },
+  // v3 — correlation-confidence marker for codex concurrency hardening. Additive nullable column;
+  // existing rows default to NULL (= unambiguous). Written only by `attachLaunchedRun` when the
+  // watcher claims a pending launched run under same-cwd concurrency. `schema.sql` stays the v1 snapshot.
+  (db) => {
+    db.exec("ALTER TABLE run ADD COLUMN correlation TEXT");
+  },
 ];
 
 /** A scalar value that can be bound to a SQLite statement parameter. */
@@ -95,6 +101,7 @@ interface RunRow {
   minutes: string | null;
   status: string;
   error: string | null;
+  correlation: string | null;
 }
 
 function parseMentions(raw: string | null): string[] | null {
@@ -263,15 +270,16 @@ export class Store {
       minutes: input.minutes ?? null,
       status: input.status,
       error: input.error ?? null,
+      correlation: input.correlation ?? null,
     };
     this.db
       .prepare(
         `INSERT INTO run
            (id, event_id, engine, session_id, role, transcript_path, transcript_offset,
-            started_at, ended_at, exit_code, diff_stat, minutes, status, error)
+            started_at, ended_at, exit_code, diff_stat, minutes, status, error, correlation)
          VALUES
            (@id, @event_id, @engine, @session_id, @role, @transcript_path, @transcript_offset,
-            @started_at, @ended_at, @exit_code, @diff_stat, @minutes, @status, @error)`,
+            @started_at, @ended_at, @exit_code, @diff_stat, @minutes, @status, @error, @correlation)`,
       )
       .run(run);
     return run;
@@ -343,22 +351,44 @@ export class Store {
    * method (rather than widening `RunUpdate` with `session_id`) keeps `session_id` immutable across the
    * general update surface — only the watcher's one-time pending→real correlation rewrites it. The real
    * id is unique, so the UNIQUE `session_id` index is preserved.
+   *
+   * `correlation` stamps the confidence marker in the SAME update: pass `'ambiguous'` when ≥2 same-cwd
+   * launches were concurrently awaiting a rollout (best-effort FIFO attribution); omit it (default
+   * `null`) for the normal single-candidate claim. The optional trailing param keeps the existing
+   * single production caller backward-compatible.
    */
   attachLaunchedRun(
     runId: string,
     sessionId: string,
     transcriptPath: string,
     transcriptOffset: number,
+    correlation: "ambiguous" | null = null,
   ): Run | undefined {
     this.db
       .prepare(
         `UPDATE run
            SET session_id = @session_id, transcript_path = @transcript_path,
-               transcript_offset = @transcript_offset
+               transcript_offset = @transcript_offset, correlation = @correlation
          WHERE id = @id`,
       )
-      .run({ id: runId, session_id: sessionId, transcript_path: transcriptPath, transcript_offset: transcriptOffset });
+      .run({
+        id: runId,
+        session_id: sessionId,
+        transcript_path: transcriptPath,
+        transcript_offset: transcriptOffset,
+        correlation,
+      });
     return this.getRun(runId);
+  }
+
+  /**
+   * Stamp a run `correlation='ambiguous'` WITHOUT otherwise touching it. The watcher calls this on the
+   * still-pending SIBLINGS of a concurrent same-cwd claim so that when each sibling's own rollout later
+   * claims it, the flag is already there (sticky) — the whole concurrent group is mutually uncertain, so
+   * every member must carry the marker, not just the first one claimed (never silently mis-attribute).
+   */
+  markRunAmbiguous(runId: string): void {
+    this.db.prepare(`UPDATE run SET correlation = 'ambiguous' WHERE id = @id`).run({ id: runId });
   }
 
   // --- mappers / helpers ---

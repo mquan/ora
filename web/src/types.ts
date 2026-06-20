@@ -12,7 +12,7 @@ export type EventStatus = "scheduled" | "running" | "done" | "failed" | "missed"
 /** A single run's state (a run is one execution of an event). */
 export type RunStatus = "running" | "done" | "failed";
 
-export interface GregorianEvent {
+export interface OraEvent {
   id: string;
   title: string;
   engine: Engine;

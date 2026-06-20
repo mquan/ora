@@ -37,8 +37,8 @@ export function checkNativeModules(load: () => void = defaultLoad): NativeCheckR
     // Take only the first line so no `    at ...` stack frames leak into the user-facing message.
     const cause = ((err as Error)?.message ?? String(err)).split("\n")[0];
     const message =
-      `gregorian: the better-sqlite3 native module failed to load.\n` +
-      `  gregorian needs Node ${SUPPORTED_NODE} (prebuilt binaries cover that range); ` +
+      `ora: the better-sqlite3 native module failed to load.\n` +
+      `  ora needs Node ${SUPPORTED_NODE} (prebuilt binaries cover that range); ` +
       `you're on Node ${process.versions.node}.\n` +
       `  Fix: switch to a supported Node and reinstall, or run \`npm rebuild better-sqlite3\`.\n` +
       `  (cause: ${cause})`;

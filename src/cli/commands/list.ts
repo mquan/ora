@@ -1,11 +1,11 @@
 /**
- * `gregorian list` — show scheduled + recorded events on one timeline.
+ * `ora list` — show scheduled + recorded events on one timeline.
  *
  * Pulls `/events` and `/runs` from the daemon and renders an aligned table: a short id (to address
- * `gregorian show`), when it fires, the engine, the event status, the run DURATION + exit code, the
+ * `ora show`), when it fires, the engine, the event status, the run DURATION + exit code, the
  * title, and a NOTES column carrying a SHORT failure reason and/or the ambiguous-correlation flag
  * (codex same-cwd concurrency). The full transcript path, full error, and minutes live in
- * `gregorian show <id>`. If the daemon is down the user gets a clear, actionable message, not a stack trace.
+ * `ora show <id>`. If the daemon is down the user gets a clear, actionable message, not a stack trace.
  */
 
 import { daemonRequest } from "../../daemon/daemon.js";
@@ -14,7 +14,7 @@ import type { Event, Run } from "../../types.js";
 
 /**
  * Latest user-facing run for an event. Filters to `role='run'` so the internal `role='summarizer'`
- * guard run (gregorian's own minutes pass) never shows up as the event's run.
+ * guard run (ora's own minutes pass) never shows up as the event's run.
  */
 function latestRun(runs: Run[]): Run | undefined {
   const visible = runs.filter((r) => r.role === "run");
@@ -75,7 +75,7 @@ export async function listCommand(): Promise<number> {
     ({ events } = await daemonRequest<{ events: Event[] }>("/events"));
     ({ runs } = await daemonRequest<{ runs: Run[] }>("/runs"));
   } catch (err) {
-    process.stderr.write(`gregorian list: ${(err as Error).message}\n`);
+    process.stderr.write(`ora list: ${(err as Error).message}\n`);
     return 1;
   }
 

@@ -9,7 +9,7 @@
  * scheduled_at. Color derives from the run's status, or the event's status when there's no run yet.
  */
 
-import type { GregorianEvent, Run } from "./types";
+import type { OraEvent, Run } from "./types";
 
 /** The visual status of a calendar block — drives its color. */
 export type ItemStatus = "scheduled" | "running" | "done" | "failed" | "missed";
@@ -41,9 +41,9 @@ function parse(iso: string | null): Date | null {
 
 /**
  * Join events and runs into positioned calendar blocks. `runs` may be the global `/runs` list — we group by
- * `event_id` ourselves. Summarizer runs (gregorian's own minutes pass) are never shown.
+ * `event_id` ourselves. Summarizer runs (ora's own minutes pass) are never shown.
  */
-export function toCalendarItems(events: GregorianEvent[], runs: Run[], now: Date): CalendarItem[] {
+export function toCalendarItems(events: OraEvent[], runs: Run[], now: Date): CalendarItem[] {
   const runsByEvent = new Map<string, Run[]>();
   for (const run of runs) {
     if (run.role && run.role !== "run") continue;
@@ -101,7 +101,7 @@ function runStatus(s: Run["status"]): ItemStatus {
   return s; // running | done | failed are all valid ItemStatus values
 }
 
-function eventStatus(s: GregorianEvent["status"]): ItemStatus {
+function eventStatus(s: OraEvent["status"]): ItemStatus {
   return s; // scheduled | running | done | failed | missed
 }
 

@@ -102,7 +102,7 @@ export async function gitDiffStat(snapshot: GitSnapshot): Promise<string | null>
 /**
  * Spawn a child DETACHED: `detached: true` makes it a process-group leader (its own pgid via
  * setsid), and `unref()` lets the parent (daemon) exit or restart without reaping it. stdio is
- * ignored — the agent's on-disk transcript is gregorian's record of truth, not captured stdout.
+ * ignored — the agent's on-disk transcript is ora's record of truth, not captured stdout.
  */
 export function spawnDetached(spec: SpawnSpec, opts: { cwd: string }): ChildProcess {
   const child = spawn(spec.command, spec.args, {

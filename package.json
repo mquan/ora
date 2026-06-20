@@ -1,17 +1,17 @@
 {
-  "name": "@mquan/gregorian",
-  "version": "0.0.0",
+  "name": "@mquan/ora",
+  "version": "0.1.0",
   "description": "A calendar your agents read AND write — schedule and record local AI agent runs (Claude Code, Codex).",
   "type": "module",
   "license": "MIT",
   "author": "Quan Nguyen",
-  "homepage": "https://github.com/mquan/gregorian#readme",
+  "homepage": "https://github.com/mquan/ora#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mquan/gregorian.git"
+    "url": "git+https://github.com/mquan/ora.git"
   },
   "bugs": {
-    "url": "https://github.com/mquan/gregorian/issues"
+    "url": "https://github.com/mquan/ora/issues"
   },
   "keywords": [
     "ai-agents",
@@ -24,7 +24,7 @@
     "cli"
   ],
   "bin": {
-    "gregorian": "dist/cli/index.js"
+    "ora": "dist/cli/index.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

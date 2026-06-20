@@ -1,5 +1,5 @@
 /**
- * The Codex engine adapter — gregorian's second concrete engine behind the frozen
+ * The Codex engine adapter — ora's second concrete engine behind the frozen
  * {@link AgentAdapterBase} contract.
  *
  * Codex differs from claude in one load-bearing way: it CANNOT pre-assign the transcript correlation

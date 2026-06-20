@@ -1,11 +1,11 @@
 /**
- * `gregorian add` — schedule a one-off run.
+ * `ora add` — schedule a one-off run.
  *
- *   gregorian add --engine claude --cwd /path --at +1m --prompt 'list files' [--model …] [--title …] [--mention …]*
+ *   ora add --engine claude --cwd /path --at +1m --prompt 'list files' [--model …] [--title …] [--mention …]*
  *
  * Resolves `--at` to an absolute time, validates that the run will actually do something (prompt
  * and/or a mention), then POSTs to the daemon, which writes the event and arms croner immediately —
- * no daemon restart needed. Every rejection is a one-line `gregorian add: <reason>` on stderr + exit 1.
+ * no daemon restart needed. Every rejection is a one-line `ora add: <reason>` on stderr + exit 1.
  */
 
 import { resolve } from "node:path";
@@ -50,7 +50,7 @@ function parseAddArgs(args: string[]): AddFlags {
 }
 
 function fail(message: string): number {
-  process.stderr.write(`gregorian add: ${message}\n`);
+  process.stderr.write(`ora add: ${message}\n`);
   return 1;
 }
 

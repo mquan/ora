@@ -90,13 +90,13 @@ function safeResolve(root: string, pathname: string): string | null {
 
 /** A minimal placeholder page when no build exists yet, so the daemon is still browseable. */
 const PLACEHOLDER_HTML = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>gregorian</title>
+<html lang="en"><head><meta charset="utf-8"><title>ora</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem;color:#222}</style>
 </head><body>
-<h1>gregorian</h1>
+<h1>ora</h1>
 <p>The daemon is running and serving this page, but the web UI hasn't been built yet.</p>
-<p>Use the CLI for now: <code>gregorian add …</code> and <code>gregorian list</code>.</p>
+<p>Use the CLI for now: <code>ora add …</code> and <code>ora list</code>.</p>
 </body></html>
 `;
 

@@ -1,5 +1,5 @@
 /**
- * Store — the single SQLite boundary for gregorian.
+ * Store — the single SQLite boundary for ora.
  *
  * Everything above it (daemon, watcher, web API) speaks typed row objects from `types.ts`;
  * only this module touches better-sqlite3. The daemon is the single writer; WAL mode lets the

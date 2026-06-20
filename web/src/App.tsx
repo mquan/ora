@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listEvents, listRuns, ApiError, NetworkError } from "./api";
-import type { GregorianEvent, Run } from "./types";
+import type { OraEvent, Run } from "./types";
 import { toCalendarItems, addDays, startOfWeek } from "./calendarModel";
 import { Calendar, type CalendarView } from "./Calendar";
 import { EventForm } from "./EventForm";
@@ -10,17 +10,17 @@ const POLL_MS = 5_000;
 const CLOCK_MS = 30_000;
 
 interface Data {
-  events: GregorianEvent[];
+  events: OraEvent[];
   runs: Run[];
 }
 
 /** A user-facing description of a load failure (never a silent blank screen). */
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
-    if (err.status === 401) return "Session expired — re-run `gregorian ui` to get a fresh token.";
+    if (err.status === 401) return "Session expired — re-run `ora ui` to get a fresh token.";
     return `The daemon returned ${err.status}: ${err.message}`;
   }
-  if (err instanceof NetworkError) return "Can't reach the gregorian daemon — is it still running?";
+  if (err instanceof NetworkError) return "Can't reach the ora daemon — is it still running?";
   return err instanceof Error ? err.message : "Unknown error loading the calendar.";
 }
 
@@ -114,7 +114,7 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="dot" /> gregorian
+          <span className="dot" /> ora
         </div>
         <div className="nav">
           <button className="btn" onClick={() => navigate(0)}>

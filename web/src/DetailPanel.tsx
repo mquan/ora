@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getEvent, ApiError, NetworkError } from "./api";
 import { MinutesPanel } from "./MinutesPanel";
 import { TranscriptViewer } from "./TranscriptViewer";
-import type { GregorianEvent, Run } from "./types";
+import type { OraEvent, Run } from "./types";
 
 /**
  * The event detail drawer: event metadata + per-run summary, each run's generated `minutes`
@@ -37,7 +37,7 @@ interface DetailPanelProps {
 }
 
 export function DetailPanel({ eventId, onClose }: DetailPanelProps) {
-  const [event, setEvent] = useState<GregorianEvent | null>(null);
+  const [event, setEvent] = useState<OraEvent | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,7 +73,7 @@ export function DetailPanel({ eventId, onClose }: DetailPanelProps) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Only user-facing runs (skip gregorian's own summarizer pass), newest first.
+  // Only user-facing runs (skip ora's own summarizer pass), newest first.
   const visibleRuns = runs
     .filter((r) => r.role !== "summarizer")
     .sort((a, b) => (b.started_at ?? "").localeCompare(a.started_at ?? ""));

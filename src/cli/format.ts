@@ -25,7 +25,7 @@ export function formatDuration(startedAt: string | null, endedAt: string | null)
   return remMin > 0 ? `${hr}h ${remMin}m` : `${hr}h`;
 }
 
-/** A short, stable id prefix for display (the user passes a prefix to `gregorian show`). */
+/** A short, stable id prefix for display (the user passes a prefix to `ora show`). */
 export function shortId(id: string): string {
   return id.slice(0, 8);
 }

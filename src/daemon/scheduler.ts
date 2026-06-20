@@ -52,8 +52,8 @@ export interface Logger {
 }
 
 export const consoleLogger: Logger = {
-  log: (m) => console.log(`[gregorian] ${m}`),
-  error: (m) => console.error(`[gregorian] ${m}`),
+  log: (m) => console.log(`[ora] ${m}`),
+  error: (m) => console.error(`[ora] ${m}`),
 };
 
 export class Scheduler {

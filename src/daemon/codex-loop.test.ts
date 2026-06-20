@@ -109,7 +109,7 @@ beforeEach(async () => {
   home = mkdtempSync(join(tmpdir(), "greg-codex-home-"));
   cwd = mkdtempSync(join(tmpdir(), "greg-codex-cwd-"));
   root = mkdtempSync(join(tmpdir(), "greg-codex-root-"));
-  process.env.GREGORIAN_HOME = home;
+  process.env.ORA_HOME = home;
   const engine = new FakeCodexEngine(root);
   daemon = new Daemon({
     port: 0,
@@ -126,7 +126,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await daemon.stop();
-  delete process.env.GREGORIAN_HOME;
+  delete process.env.ORA_HOME;
   for (const dir of [home, cwd, root]) rmSync(dir, { recursive: true, force: true });
 });
 

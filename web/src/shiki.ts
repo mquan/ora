@@ -116,7 +116,7 @@ export async function highlight(code: string, lang: string): Promise<string | nu
       defaultColor: false,
     });
   } catch (e) {
-    console.error("gregorian: shiki highlight failed", e);
+    console.error("ora: shiki highlight failed", e);
     return null;
   }
 }

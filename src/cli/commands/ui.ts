@@ -1,6 +1,6 @@
 /**
- * `gregorian ui` — open the timeline in a browser. "Ensures the daemon is up" per the design: if a
- * healthy daemon is already published in `~/.gregorian/daemon.json`, reuse it; otherwise spawn one
+ * `ora ui` — open the timeline in a browser. "Ensures the daemon is up" per the design: if a
+ * healthy daemon is already published in `~/.ora/daemon.json`, reuse it; otherwise spawn one
  * DETACHED (so it outlives this short-lived CLI), wait for `/health`, then open the browser.
  *
  * Token delivery (Jupyter model): the daemon's API is bearer-authed but the served HTML carries no
@@ -19,7 +19,7 @@ import { openSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
-import { readDaemonInfo, ensureHome, gregorianHome, type DaemonInfo } from "../../daemon/paths.js";
+import { readDaemonInfo, ensureHome, oraHome, type DaemonInfo } from "../../daemon/paths.js";
 
 /** How long to wait for a freshly-spawned daemon to publish a healthy `/health`. */
 const READY_TIMEOUT_MS = 10_000;
@@ -85,7 +85,7 @@ export async function ensureDaemon(deps: UiDeps, opts: UiOptions = {}): Promise<
   }
   throw new Error(
     `daemon did not become ready within ${Math.round(timeout / 1000)}s. ` +
-      `Check the log at ${join(gregorianHome(), "daemon.log")}.`,
+      `Check the log at ${join(oraHome(), "daemon.log")}.`,
   );
 }
 
@@ -95,7 +95,7 @@ export async function runUi(deps: UiDeps, opts: UiOptions = {}): Promise<number>
   try {
     info = await ensureDaemon(deps, opts);
   } catch (err) {
-    deps.error(`gregorian ui: ${(err as Error).message}`);
+    deps.error(`ora ui: ${(err as Error).message}`);
     return 1;
   }
 
@@ -119,10 +119,10 @@ async function probeHealth(info: DaemonInfo): Promise<boolean> {
   }
 }
 
-/** Spawn `gregorian daemon` detached, redirecting its stdio into `~/.gregorian/daemon.log`. */
+/** Spawn `ora daemon` detached, redirecting its stdio into `~/.ora/daemon.log`. */
 function spawnDaemonDetached(): void {
   ensureHome();
-  const logFd = openSync(join(gregorianHome(), "daemon.log"), "a");
+  const logFd = openSync(join(oraHome(), "daemon.log"), "a");
   // The CLI entry sits one level up from this command module (src/cli/commands/ui.ts → src/cli/index.js).
   const cliEntry = fileURLToPath(new URL("../index.js", import.meta.url));
   const child = spawn(process.execPath, [cliEntry, "daemon"], {

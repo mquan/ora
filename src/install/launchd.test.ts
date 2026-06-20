@@ -17,7 +17,7 @@ import {
   type LaunchctlResult,
 } from "./launchd.js";
 
-const PLIST = "/Users/x/Library/LaunchAgents/dev.gregorian.daemon.plist";
+const PLIST = "/Users/x/Library/LaunchAgents/dev.ora.daemon.plist";
 const AGENTS_DIR = "/Users/x/Library/LaunchAgents";
 
 const ok = (): LaunchctlResult => ({ status: 0, stderr: "" });
@@ -59,15 +59,15 @@ describe("generatePlist", () => {
   const base = {
     label: LABEL,
     nodePath: "/usr/local/bin/node",
-    cliEntry: "/opt/gregorian/dist/cli/index.js",
-    logPath: "/Users/x/.gregorian/daemon.log",
+    cliEntry: "/opt/ora/dist/cli/index.js",
+    logPath: "/Users/x/.ora/daemon.log",
     path: "/usr/local/bin:/usr/bin:/bin",
   };
 
   it("renders a well-formed LaunchAgent plist", () => {
     const xml = generatePlist(base);
     expect(xml).toContain("<!DOCTYPE plist");
-    expect(xml).toContain("<key>Label</key>\n    <string>dev.gregorian.daemon</string>");
+    expect(xml).toContain("<key>Label</key>\n    <string>dev.ora.daemon</string>");
     expect(xml).toContain("<key>RunAtLoad</key>\n    <true/>");
     expect(xml).toContain("<key>KeepAlive</key>\n    <true/>");
     // ProgramArguments in order: node, cli entry, then the `daemon` subcommand.
@@ -78,8 +78,8 @@ describe("generatePlist", () => {
     expect(args.indexOf(base.nodePath)).toBeLessThan(args.indexOf(base.cliEntry));
     expect(args.indexOf(base.cliEntry)).toBeLessThan(args.indexOf("daemon"));
     // Log paths (both stdout + stderr) and the captured PATH are present.
-    expect(xml).toContain("<key>StandardOutPath</key>\n    <string>/Users/x/.gregorian/daemon.log</string>");
-    expect(xml).toContain("<key>StandardErrorPath</key>\n    <string>/Users/x/.gregorian/daemon.log</string>");
+    expect(xml).toContain("<key>StandardOutPath</key>\n    <string>/Users/x/.ora/daemon.log</string>");
+    expect(xml).toContain("<key>StandardErrorPath</key>\n    <string>/Users/x/.ora/daemon.log</string>");
     expect(xml).toContain("<key>PATH</key>\n      <string>/usr/local/bin:/usr/bin:/bin</string>");
   });
 

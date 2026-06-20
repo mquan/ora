@@ -1,11 +1,11 @@
 /**
- * Transcript watcher — gregorian's single recording pipeline (design §A1, P4b).
+ * Transcript watcher — ora's single recording pipeline (design §A1, P4b).
  *
  * One {@link Watcher} subscribes (via chokidar) to every engine's {@link AgentEngine.transcriptRoots}
  * and drives run lifecycle for BOTH kinds of session, joining on `session_id`:
  *   - LAUNCHED runs — the scheduler already wrote a `running` `run` row up-front; the watcher
  *     re-attaches by sessionId, tracks the transcript offset, and finalizes on idle.
- *   - AD-HOC runs — a `claude` session the user started themselves (gregorian never launched it).
+ *   - AD-HOC runs — a `claude` session the user started themselves (ora never launched it).
  *     The watcher DISCOVERS it: creates an `Event(adhoc, running)` + `Run(role=run, running)` reading
  *     the cwd from the transcript, then records it like any other run.
  *
@@ -71,8 +71,8 @@ export interface Logger {
 
 /** Default console logger; silence it in tests by injecting a no-op {@link Logger}. */
 export const consoleLogger: Logger = {
-  log: (m) => console.log(`[gregorian:watcher] ${m}`),
-  error: (m) => console.error(`[gregorian:watcher] ${m}`),
+  log: (m) => console.log(`[ora:watcher] ${m}`),
+  error: (m) => console.error(`[ora:watcher] ${m}`),
 };
 
 /** Injected dependencies — no globals, so the watcher is unit/integration testable in isolation. */
@@ -206,7 +206,7 @@ export class Watcher {
 
       if (existing) {
         if (existing.role === "summarizer") {
-          // Self-ingestion guard: gregorian's own minutes pass — never record it.
+          // Self-ingestion guard: ora's own minutes pass — never record it.
           this.logger.log(`skipped summarizer session ${sessionId}`);
           return;
         }

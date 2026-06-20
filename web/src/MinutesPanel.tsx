@@ -2,7 +2,7 @@ import { Markdown } from "./Markdown";
 import type { Run } from "./types";
 
 /**
- * The generated "minutes" for a run — gregorian's `claude -p` summary of what the run did. Owns its
+ * The generated "minutes" for a run — ora's `claude -p` summary of what the run did. Owns its
  * own `<details>` disclosure (open by default: minutes are short and the most-wanted read).
  *
  * Trust boundary: `minutes` is agent-authored. It renders through `<Markdown>` (react-markdown → React

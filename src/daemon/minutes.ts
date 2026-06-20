@@ -2,7 +2,7 @@
  * MinutesService — the daemon's bridge from a finalized run to its recorded minutes (design §A3, R1).
  *
  * Both finalize paths call `onRunFinalized(run)` fire-and-forget: the scheduler's daemon-alive exit
- * and the watcher's idle/liveness finalize. The service runs gregorian's own `claude -p` summarizer
+ * and the watcher's idle/liveness finalize. The service runs ora's own `claude -p` summarizer
  * pass over the run's transcript + diff and writes the result into `run.minutes` — at most ONCE per
  * run (idempotent: skips a run that already has minutes or is mid-generation).
  *

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * gregorian CLI entry point.
+ * ora CLI entry point.
  *
  * Dispatches to the commands — `add`, `list`, `show`, `daemon`, `ui`, `install`, `uninstall`.
  * `add`/`list`/`show` are HTTP clients of the running daemon (127.0.0.1 + token); `daemon` is the
@@ -16,10 +16,10 @@
 
 import { checkNativeModules } from "../install/native-check.js";
 
-const USAGE = `gregorian — a calendar your agents read AND write
+const USAGE = `ora — a calendar your agents read AND write
 
 Usage:
-  gregorian <command> [options]
+  ora <command> [options]
 
 Commands:
   daemon [--port <n>]            Run the scheduler/recorder daemon (foreground)
@@ -79,7 +79,7 @@ async function main(argv: string[]): Promise<number> {
     case "uninstall":
       return (await import("./commands/install.js")).uninstallCommand(rest);
     default:
-      process.stderr.write(`gregorian: unknown command '${cmd}'\nRun 'gregorian --help' for usage.\n`);
+      process.stderr.write(`ora: unknown command '${cmd}'\nRun 'ora --help' for usage.\n`);
       return 1;
   }
 }
@@ -87,7 +87,7 @@ async function main(argv: string[]): Promise<number> {
 main(process.argv).then(
   (code) => process.exit(code),
   (err) => {
-    process.stderr.write(`gregorian: ${(err as Error)?.message ?? String(err)}\n`);
+    process.stderr.write(`ora: ${(err as Error)?.message ?? String(err)}\n`);
     process.exit(1);
   },
 );

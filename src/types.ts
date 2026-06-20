@@ -1,5 +1,5 @@
 /**
- * Shared domain types for gregorian.
+ * Shared domain types for ora.
  *
  * Row interfaces mirror the SQLite columns in `snake_case` so the store, daemon,
  * watcher, and web API all speak the same shapes with no mapping layer. The schema
@@ -7,9 +7,9 @@
  */
 
 /** Package marker. The real version is sourced from package.json at build/release time. */
-export const GREGORIAN = "gregorian" as const;
+export const ORA = "ora" as const;
 
-/** Agent engines gregorian can launch and record. */
+/** Agent engines ora can launch and record. */
 export type EngineKind = "claude" | "codex";
 
 /**
@@ -35,7 +35,7 @@ export function isPendingSession(sessionId: string): boolean {
 
 /**
  * A run's purpose. `run` is a user-facing agent run the watcher records; `summarizer`
- * is gregorian's own `claude -p` minutes pass, which the watcher skips (self-ingestion guard).
+ * is ora's own `claude -p` minutes pass, which the watcher skips (self-ingestion guard).
  */
 export type RunRole = "run" | "summarizer";
 
@@ -104,7 +104,7 @@ export interface Run {
   /**
    * Named, human-readable reason the run failed (spawn/finalize/interrupted) — null when the run
    * did not fail. A failed run is never a cause-less dead end (m2-finding B); surfaced in
-   * `gregorian list` (short) and `gregorian show` (full). Added by migration v2.
+   * `ora list` (short) and `ora show` (full). Added by migration v2.
    */
   error: string | null;
   /**
@@ -112,7 +112,7 @@ export interface Run {
    * under concurrency. `null` = normal/unambiguous. `'ambiguous'` = ≥2 same-cwd launches were awaiting
    * a rollout within the confidence window, so this run's attribution is best-effort FIFO and could be
    * swapped with a sibling's — recorded (never lost), but flagged visibly (never silently mis-attributed).
-   * Surfaced in `gregorian list`/`show` and the web detail panel. Added by migration v3.
+   * Surfaced in `ora list`/`show` and the web detail panel. Added by migration v3.
    */
   correlation: string | null;
 }

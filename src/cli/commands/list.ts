@@ -3,9 +3,9 @@
  *
  * Pulls `/events` and `/runs` from the daemon and renders an aligned table: a short id (to address
  * `gregorian show`), when it fires, the engine, the event status, the run DURATION + exit code, the
- * title, and (for a failed run) a SHORT failure reason. The full transcript path, full error, and
- * minutes live in `gregorian show <id>`. If the daemon is down the user gets a clear, actionable
- * message, not a stack trace.
+ * title, and a NOTES column carrying a SHORT failure reason and/or the ambiguous-correlation flag
+ * (codex same-cwd concurrency). The full transcript path, full error, and minutes live in
+ * `gregorian show <id>`. If the daemon is down the user gets a clear, actionable message, not a stack trace.
  */
 
 import { daemonRequest } from "../../daemon/daemon.js";
@@ -21,13 +21,26 @@ function latestRun(runs: Run[]): Run | undefined {
   return visible.length > 0 ? visible[visible.length - 1] : undefined;
 }
 
+/**
+ * The NOTES cell: the catch-all "what to know about this run" column. Carries the ambiguous-correlation
+ * flag (codex same-cwd concurrency — attribution is best-effort) and/or a SHORT failure reason. Both can
+ * be present at once. `—` when the run is clean.
+ */
+function notesCell(run: Run | undefined): string {
+  if (!run) return "—";
+  const notes: string[] = [];
+  if (run.correlation === "ambiguous") notes.push("⚠ ambiguous correlation");
+  if (run.error) notes.push(clipInline(run.error, 40));
+  return notes.length > 0 ? notes.join(" · ") : "—";
+}
+
 function pad(value: string, width: number): string {
   return value.length >= width ? value : value + " ".repeat(width - value.length);
 }
 
 /** Render the timeline table. Pure (no I/O) so it is unit-tested directly. */
 export function renderTable(events: Event[], runsByEvent: Map<string, Run[]>): string {
-  const header = ["ID", "WHEN", "ENGINE", "STATUS", "DUR", "EXIT", "TITLE", "ERROR"];
+  const header = ["ID", "WHEN", "ENGINE", "STATUS", "DUR", "EXIT", "TITLE", "NOTES"];
   const rows = events.map((e) => {
     const run = latestRun(runsByEvent.get(e.id) ?? []);
     return [
@@ -38,7 +51,7 @@ export function renderTable(events: Event[], runsByEvent: Map<string, Run[]>): s
       run ? formatDuration(run.started_at, run.ended_at) : "—",
       run?.exit_code != null ? String(run.exit_code) : "—",
       clipInline(e.title, 40),
-      run?.error ? clipInline(run.error, 40) : "—",
+      notesCell(run),
     ];
   });
 

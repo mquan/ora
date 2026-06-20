@@ -27,6 +27,19 @@ export interface GregorianEvent {
   created_at: string;
 }
 
+/** One selectable model for an engine (mirrors the daemon registry's `ModelChoice`). */
+export interface EngineModelChoice {
+  value: string;
+  label: string;
+}
+
+/** One engine's registry entry from `GET /engines` — its id, label, and curated model choices. */
+export interface EngineInfo {
+  id: Engine;
+  label: string;
+  models: EngineModelChoice[];
+}
+
 export interface Run {
   id: string;
   event_id: string;
@@ -42,6 +55,9 @@ export interface Run {
   minutes: string | null;
   status: RunStatus;
   error: string | null;
+  /** `'ambiguous'` when this run was correlated to a transcript under same-cwd concurrency (best-effort
+   *  FIFO attribution); `null`/absent when unambiguous. Surfaced as a warning on the run card. */
+  correlation?: string | null;
 }
 
 /** One normalized transcript entry (mirrors the daemon's `TranscriptEvent`). `raw` keeps the original

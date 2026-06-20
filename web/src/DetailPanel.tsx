@@ -137,6 +137,11 @@ export function DetailPanel({ eventId, onClose }: DetailPanelProps) {
                     <span className="muted">{duration(run)}</span>
                     {run.exit_code !== null && <span className="muted">· exit {run.exit_code}</span>}
                   </div>
+                  {run.correlation === "ambiguous" && (
+                    <div className="run-error" title="≥2 concurrent same-cwd launches were awaiting a transcript; attribution is best-effort (FIFO) and could be swapped with a sibling run.">
+                      ⚠ ambiguous correlation
+                    </div>
+                  )}
                   {run.error && <div className="run-error">⚠ {run.error}</div>}
                   <MinutesPanel run={run} />
                   {run.transcript_path && <TranscriptViewer runId={run.id} />}

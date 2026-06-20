@@ -34,6 +34,7 @@ function makeRun(over: Partial<Run> = {}): Run {
     minutes: null,
     status: "done",
     error: null,
+    correlation: null,
     ...over,
   };
 }

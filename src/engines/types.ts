@@ -1,7 +1,7 @@
 /**
- * The engine seam — gregorian's load-bearing contract.
+ * The engine seam — ora's load-bearing contract.
  *
- * Every agent gregorian can launch or record (claude today, codex next, remote/API in v2)
+ * Every agent ora can launch or record (claude today, codex next, remote/API in v2)
  * hides behind {@link AgentEngine}. The daemon, watcher, and minutes pass speak only this
  * interface, so adding an engine means writing one adapter and touching zero core code
  * (design doc §"AgentEngine / RunHandle interface (M1)"). These types carry NO behavior —
@@ -61,7 +61,7 @@ export interface AgentEngine {
    * of this engine's {@link transcriptRoots}, recover the run's identity. Returns `null` ONLY when
    * `path` is not this engine's transcript at all (wrong dir, wrong extension) — so the watcher can
    * ignore unrelated files without baking any engine's on-disk convention into itself. This is what
-   * lets the watcher DISCOVER ad-hoc sessions (ones gregorian never launched) engine-agnostically;
+   * lets the watcher DISCOVER ad-hoc sessions (ones ora never launched) engine-agnostically;
    * codex (m3) drops in by implementing it. Synchronous + best-effort: `sessionId` is always cheaply
    * derivable from the path, while `cwd` is read from the file's own content and may be `null` on a
    * freshly-created/partially-flushed transcript (see {@link TranscriptIdentity}).

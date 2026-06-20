@@ -3,12 +3,12 @@
 Schedule your first agent run and read its minutes — about 60 seconds end to end.
 
 > **Requirements:** Node.js `>=20 <23` (better-sqlite3 ships prebuilt binaries for that range, so
-> `npx` never has to compile). No `ANTHROPIC_API_KEY` needed — gregorian launches your local
+> `npx` never has to compile). No `ANTHROPIC_API_KEY` needed — ora launches your local
 > `claude` / `codex` binaries and reuses their existing login.
 
-> **Install:** the examples below use the `gregorian` command. Get it with
-> `npm install -g @mquan/gregorian`, or prefix any command with `npx @mquan/gregorian` to run without
-> installing (e.g. `npx @mquan/gregorian install`).
+> **Install:** the examples below use the `ora` command. Get it with
+> `npm install -g @mquan/ora`, or prefix any command with `npx @mquan/ora` to run without
+> installing (e.g. `npx @mquan/ora install`).
 
 ## 1. Start the daemon
 
@@ -18,17 +18,17 @@ The daemon is the scheduler + recorder: it fires scheduled runs and records thei
 **macOS (keep it alive across logout/login) — recommended:**
 
 ```bash
-gregorian install
+ora install
 ```
 
-This writes and loads a launchd agent (`~/Library/LaunchAgents/dev.gregorian.daemon.plist`) that
+This writes and loads a launchd agent (`~/Library/LaunchAgents/dev.ora.daemon.plist`) that
 starts the daemon now and at every login. Re-run it after changing your `$PATH`. Remove it later with
-`gregorian uninstall`.
+`ora uninstall`.
 
 **Any platform (foreground, for a quick try):**
 
 ```bash
-gregorian daemon
+ora daemon
 ```
 
 Leave it running in its own terminal. (Linux/Windows keep-alive is manual for now — see the README.)
@@ -38,7 +38,7 @@ Leave it running in its own terminal. (Linux/Windows keep-alive is manual for no
 In another terminal:
 
 ```bash
-gregorian add --engine claude --at +1m --prompt 'list the files in this directory'
+ora add --engine claude --at +1m --prompt 'list the files in this directory'
 ```
 
 - `--engine claude` (or `codex`) — which agent to launch.
@@ -51,14 +51,14 @@ gregorian add --engine claude --at +1m --prompt 'list the files in this director
 ## 3. Watch it fire
 
 ```bash
-gregorian list
+ora list
 ```
 
 You'll see the event move from scheduled to done (with an exit code) once the minute elapses. Prefer a
 timeline view? Open the web UI:
 
 ```bash
-gregorian ui
+ora ui
 ```
 
 This ensures the daemon is up and opens the week/month/agenda timeline in your browser.
@@ -66,7 +66,7 @@ This ensures the daemon is up and opens the week/month/agenda timeline in your b
 ## 4. Read the minutes
 
 ```bash
-gregorian show <id>
+ora show <id>
 ```
 
 This renders the run's auto-generated **minutes** — a structured summary of what the agent did — along
@@ -75,4 +75,4 @@ with its exit status and the path to the full transcript.
 ---
 
 That's the loop: **schedule → fire → record → read.** From here, schedule recurring work, attach
-skills with `--mention`, or browse everything on the timeline with `gregorian ui`.
+skills with `--mention`, or browse everything on the timeline with `ora ui`.

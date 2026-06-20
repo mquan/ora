@@ -1,4 +1,4 @@
--- gregorian schema v1 (locked in design doc §"SQLite schema (M1)").
+-- ora schema v1 (locked in design doc §"SQLite schema (M1)").
 -- Idempotent: safe to run on every open behind a user_version gate.
 
 -- a scheduled template that spawns occurrences; null for one-off/ad-hoc events

@@ -82,7 +82,7 @@ beforeEach(async () => {
   home = mkdtempSync(join(tmpdir(), "greg-loop-home-"));
   cwd = mkdtempSync(join(tmpdir(), "greg-loop-cwd-")); // a real dir so the R6 cwd check passes
   root = mkdtempSync(join(tmpdir(), "greg-loop-root-")); // fake transcript root (not ~/.claude)
-  process.env.GREGORIAN_HOME = home;
+  process.env.ORA_HOME = home;
   const engine = new FakeLoopEngine(root);
   daemon = new Daemon({
     port: 0,
@@ -99,7 +99,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await daemon.stop();
-  delete process.env.GREGORIAN_HOME;
+  delete process.env.ORA_HOME;
   for (const dir of [home, cwd, root]) rmSync(dir, { recursive: true, force: true });
 });
 

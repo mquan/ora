@@ -1,10 +1,10 @@
 /**
- * macOS launchd keep-alive for the gregorian daemon.
+ * macOS launchd keep-alive for the ora daemon.
  *
  * The daemon is a long-lived foreground process; on macOS we keep it alive across logout/login by
- * installing a per-user LaunchAgent at `~/Library/LaunchAgents/dev.gregorian.daemon.plist`. launchd
+ * installing a per-user LaunchAgent at `~/Library/LaunchAgents/dev.ora.daemon.plist`. launchd
  * auto-loads any plist living there at every login, and `KeepAlive` restarts the daemon if it exits —
- * so the OS, not gregorian, owns liveness (the locked design).
+ * so the OS, not ora, owns liveness (the locked design).
  *
  * Everything here is a PURE CORE over injected effects (mirroring `cli/commands/ui.ts`): `generatePlist`
  * is a pure string function, and `installLaunchd`/`uninstallLaunchd` take their filesystem + `launchctl`
@@ -18,7 +18,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** launchd Label and the plist filename stem. */
-export const LABEL = "dev.gregorian.daemon";
+export const LABEL = "dev.ora.daemon";
 
 /** Outcome of a `launchctl` invocation, as the install/uninstall cores observe it. */
 export interface LaunchctlResult {
@@ -33,7 +33,7 @@ export interface PlistOptions {
   label: string;
   /** Absolute path to the Node binary (`process.execPath`). */
   nodePath: string;
-  /** Absolute path to the gregorian CLI entry (`dist/cli/index.js`). */
+  /** Absolute path to the ora CLI entry (`dist/cli/index.js`). */
   cliEntry: string;
   /** Absolute path for the daemon's stdout+stderr log. */
   logPath: string;
@@ -103,9 +103,9 @@ export function cliEntryPath(): string {
 /** The macOS-only message for an unsupported platform — `action` is `install` or `uninstall`. */
 function nonDarwinMessage(action: "install" | "uninstall"): string {
   return (
-    `gregorian ${action}: automated keep-alive is macOS-only for v1.\n` +
-    `  Linux:   run \`gregorian daemon\` from a systemd user service (see README).\n` +
-    `  Windows: run \`gregorian daemon\` at login via Task Scheduler / the Startup folder (see README).`
+    `ora ${action}: automated keep-alive is macOS-only for v1.\n` +
+    `  Linux:   run \`ora daemon\` from a systemd user service (see README).\n` +
+    `  Windows: run \`ora daemon\` at login via Task Scheduler / the Startup folder (see README).`
   );
 }
 
@@ -149,15 +149,15 @@ export function installLaunchd(deps: InstallDeps): number {
   if (loaded.status !== 0) {
     const stderr = loaded.stderr.trim();
     deps.error(
-      `gregorian install: launchctl load failed (exit ${loaded.status ?? "null"}).\n` +
+      `ora install: launchctl load failed (exit ${loaded.status ?? "null"}).\n` +
         (stderr ? `  ${stderr}\n` : "") +
-        `  The plist was written to ${deps.plistFile} — fix the error above and re-run \`gregorian install\`.`,
+        `  The plist was written to ${deps.plistFile} — fix the error above and re-run \`ora install\`.`,
     );
     return 1;
   }
 
   deps.log(
-    `gregorian: installed the launchd keep-alive agent.\n` +
+    `ora: installed the launchd keep-alive agent.\n` +
       `  plist: ${deps.plistFile}\n` +
       `  The daemon is running now and will restart automatically at login.`,
   );
@@ -186,14 +186,14 @@ export function uninstallLaunchd(deps: UninstallDeps): number {
   }
 
   if (!deps.fileExists(deps.plistFile)) {
-    deps.log(`gregorian: not installed (no launchd agent at ${deps.plistFile}). Nothing to do.`);
+    deps.log(`ora: not installed (no launchd agent at ${deps.plistFile}). Nothing to do.`);
     return 0;
   }
 
   deps.runLaunchctl(["unload", "-w", deps.plistFile]);
   deps.removeFile(deps.plistFile);
   deps.log(
-    `gregorian: removed the launchd keep-alive agent.\n` +
+    `ora: removed the launchd keep-alive agent.\n` +
       `  ${deps.plistFile}\n` +
       `  The daemon will no longer restart at login.`,
   );

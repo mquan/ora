@@ -53,7 +53,7 @@ function mkRun(over: Partial<Run> = {}): Run {
   };
 }
 
-describe("renderDetail (gregorian show)", () => {
+describe("renderDetail (ora show)", () => {
   it("renders duration, exit code, and the full minutes for a completed run", () => {
     const event = mkEvent();
     const run = mkRun({ minutes: "The agent listed the files and changed nothing." });
@@ -111,7 +111,7 @@ describe("renderDetail (gregorian show)", () => {
   });
 });
 
-describe("renderTable (gregorian list)", () => {
+describe("renderTable (ora list)", () => {
   it("has the ID + DUR + EXIT + NOTES columns and renders the run's duration", () => {
     const event = mkEvent();
     const map = new Map<string, Run[]>([[event.id, [mkRun()]]]);

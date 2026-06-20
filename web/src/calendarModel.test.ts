@@ -7,9 +7,9 @@ import {
   startOfWeek,
   sameDay,
 } from "./calendarModel";
-import type { GregorianEvent, Run } from "./types";
+import type { OraEvent, Run } from "./types";
 
-function event(over: Partial<GregorianEvent> = {}): GregorianEvent {
+function event(over: Partial<OraEvent> = {}): OraEvent {
   return {
     id: "e1",
     title: "nightly tidy",
@@ -90,7 +90,7 @@ describe("toCalendarItems", () => {
     expect(items[0].status).toBe("missed");
   });
 
-  it("ignores summarizer runs (gregorian's own minutes pass)", () => {
+  it("ignores summarizer runs (ora's own minutes pass)", () => {
     const items = toCalendarItems([event()], [run({ role: "summarizer" })], NOW);
     // No `run`-role run started → falls back to the scheduled placement, not the summarizer.
     expect(items[0].scheduledOnly).toBe(true);

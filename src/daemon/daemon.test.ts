@@ -7,7 +7,7 @@
  *      recorded with its exit code + transcript path (the DoD's "list shows the run" backbone).
  *
  *   2. Daemon HTTP API — boots a real {@link Daemon} on an ephemeral port (`port: 0`) under a
- *      hermetic `GREGORIAN_HOME`, then hits it over loopback with `fetch`. Covers `/health` (no
+ *      hermetic `ORA_HOME`, then hits it over loopback with `fetch`. Covers `/health` (no
  *      auth), bearer auth, POST/GET `/events`, GET `/runs`, validation 400s, the 404 fallback,
  *      the body-size 413, and that the server binds 127.0.0.1 only. POST `/events` arming proves
  *      "a new event arms without a daemon restart."
@@ -93,7 +93,7 @@ describe("Scheduler", () => {
   let store: Store;
 
   beforeEach(() => {
-    dbPath = join(tmpdir(), `gregorian-sched-${randomUUID()}.db`);
+    dbPath = join(tmpdir(), `ora-sched-${randomUUID()}.db`);
     store = new Store(dbPath);
   });
 
@@ -246,10 +246,10 @@ describe("Daemon HTTP API", () => {
   let engine: StubEngine;
 
   beforeEach(async () => {
-    home = mkdtempSync(join(tmpdir(), "gregorian-home-"));
+    home = mkdtempSync(join(tmpdir(), "ora-home-"));
     // R6 validates that the scheduled cwd exists — POST tests must use a real directory.
-    realCwd = mkdtempSync(join(tmpdir(), "gregorian-cwd-"));
-    process.env.GREGORIAN_HOME = home;
+    realCwd = mkdtempSync(join(tmpdir(), "ora-cwd-"));
+    process.env.ORA_HOME = home;
     engine = new StubEngine((sessionId) => stubResult({ sessionId }));
     daemon = new Daemon({ port: 0, logger: silentLogger, engineResolver: () => engine });
     const info = await daemon.start();
@@ -259,7 +259,7 @@ describe("Daemon HTTP API", () => {
 
   afterEach(async () => {
     await daemon.stop();
-    delete process.env.GREGORIAN_HOME;
+    delete process.env.ORA_HOME;
     rmSync(home, { recursive: true, force: true });
     rmSync(realCwd, { recursive: true, force: true });
   });
@@ -287,7 +287,7 @@ describe("Daemon HTTP API", () => {
     expect(res.headers.get("content-type")).toMatch(/text\/html/);
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     const body = await res.text();
-    expect(body.toLowerCase()).toContain("gregorian");
+    expect(body.toLowerCase()).toContain("ora");
   });
 
   it("GET /runs/:id/transcript requires a bearer token", async () => {

@@ -5,7 +5,7 @@
  *   1. Deterministic units (ALWAYS run): the `claude` spawn is stubbed via the {@link ClaudeRunner}
  *      seam, so these are fast, offline, and need no auth. They cover condensation budgeting, the
  *      prompt shape, and every failure-mode → no-fabricated-minutes path.
- *   2. A gated `[EVAL]` (runs only with `GREGORIAN_EVAL=1`): summarizes a real fixture transcript
+ *   2. A gated `[EVAL]` (runs only with `ORA_EVAL=1`): summarizes a real fixture transcript
  *      with the REAL `claude` binary and asserts the minutes are substantive — the "a human would
  *      read it" quality check from the test plan. Skipped in CI (no claude login).
  */
@@ -267,8 +267,8 @@ describe("summarize — realistic transcript via ClaudeEngine.parseTranscript", 
   });
 });
 
-// Gated quality eval — real `claude`, real auth. Run with: GREGORIAN_EVAL=1 npm test
-describe.runIf(Boolean(process.env.GREGORIAN_EVAL))("summarize — [EVAL] minutes quality", () => {
+// Gated quality eval — real `claude`, real auth. Run with: ORA_EVAL=1 npm test
+describe.runIf(Boolean(process.env.ORA_EVAL))("summarize — [EVAL] minutes quality", () => {
   it(
     "produces substantive minutes a human would read",
     async () => {

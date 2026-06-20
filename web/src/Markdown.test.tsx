@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { Markdown } from "./Markdown";
 
 // Rendered to a static HTML string via react-dom/server (synchronous, node-safe — no jsdom, matching the
-// gregorian web convention of a node test env). These cover the two things that matter for agent-authored
+// ora web convention of a node test env). These cover the two things that matter for agent-authored
 // prose: it formats as markdown, and the trust boundary holds (raw HTML stays inert, dangerous URLs drop).
 const render = (content: string) => renderToStaticMarkup(<Markdown content={content} />);
 

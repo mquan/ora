@@ -1,10 +1,10 @@
 /**
- * Filesystem contract for gregorian's local state — the single place that knows where
- * `~/.gregorian/` lives and how the daemon connection file is shaped.
+ * Filesystem contract for ora's local state — the single place that knows where
+ * `~/.ora/` lives and how the daemon connection file is shaped.
  *
  * Both the daemon (writer) and the CLI client (reader) import this, so the `db` path, the
- * `daemon.json` shape, and the home-dir resolution exist exactly once (DRY). `GREGORIAN_HOME`
- * overrides the default `~/.gregorian` — required for hermetic tests, and handy for relocating
+ * `daemon.json` shape, and the home-dir resolution exist exactly once (DRY). `ORA_HOME`
+ * overrides the default `~/.ora` — required for hermetic tests, and handy for relocating
  * state. The connection file is written **atomically** (temp + rename) so a reader never sees a
  * half-written file, and `0600` so other local users can't read the daemon token.
  */
@@ -26,32 +26,32 @@ export interface DaemonInfo {
   port: number;
   /** Bearer token the client must present on every authed request. */
   token: string;
-  /** Daemon process id — for diagnostics and a future `gregorian stop`. */
+  /** Daemon process id — for diagnostics and a future `ora stop`. */
   pid: number;
   /** ISO time the daemon started. */
   startedAt: string;
 }
 
-/** Root of gregorian's local state. `GREGORIAN_HOME` overrides `~/.gregorian`. */
-export function gregorianHome(): string {
-  return process.env.GREGORIAN_HOME ?? join(homedir(), ".gregorian");
+/** Root of ora's local state. `ORA_HOME` overrides `~/.ora`. */
+export function oraHome(): string {
+  return process.env.ORA_HOME ?? join(homedir(), ".ora");
 }
 
 /** Create the home dir if missing, `0700` (private to the user). Idempotent. */
 export function ensureHome(): string {
-  const home = gregorianHome();
+  const home = oraHome();
   mkdirSync(home, { recursive: true, mode: 0o700 });
   return home;
 }
 
 /** Absolute path to the SQLite database file. */
 export function dbPath(): string {
-  return join(gregorianHome(), "gregorian.db");
+  return join(oraHome(), "ora.db");
 }
 
 /** Absolute path to the daemon connection file. */
 export function daemonInfoPath(): string {
-  return join(gregorianHome(), "daemon.json");
+  return join(oraHome(), "daemon.json");
 }
 
 /**

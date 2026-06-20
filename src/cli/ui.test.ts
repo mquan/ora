@@ -1,5 +1,5 @@
 /**
- * `gregorian ui` core tests — `runUi`/`ensureDaemon` over injected effects, so no real daemon is spawned
+ * `ora ui` core tests — `runUi`/`ensureDaemon` over injected effects, so no real daemon is spawned
  * and no real browser opens. Covers the four branches that matter: daemon already up, daemon-down →
  * spawn + poll → up, readiness timeout (clear error, exit 1), and browser-open failure (still exit 0,
  * URL printed for the user).

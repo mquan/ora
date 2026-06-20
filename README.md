@@ -1,19 +1,19 @@
-# gregorian
+# ora
 
 A calendar your agents read AND write. Schedule and record local AI agent runs (Claude Code, Codex) on one timeline, with auto-generated "minutes."
 
 ## Get started in 60 seconds
 
 ```bash
-npx @mquan/gregorian install                                            # macOS: start the recorder daemon + keep it alive at login
-npx @mquan/gregorian add --engine claude --at +1m --prompt 'list files' # schedule a run one minute out
-npx @mquan/gregorian list                                               # watch it fire
-npx @mquan/gregorian show <id>                                          # read the auto-generated minutes
+npx @mquan/ora install                                            # macOS: start the recorder daemon + keep it alive at login
+npx @mquan/ora add --engine claude --at +1m --prompt 'list files' # schedule a run one minute out
+npx @mquan/ora list                                               # watch it fire
+npx @mquan/ora show <id>                                          # read the auto-generated minutes
 ```
 
-Prefer to type just `gregorian`? `npm install -g @mquan/gregorian` first. No `ANTHROPIC_API_KEY`
-required — gregorian drives your existing local `claude` / `codex` login. Not on macOS? Run the daemon
-in the foreground with `gregorian daemon` instead of `install`. Full walkthrough, flags, and the web
+Prefer to type just `ora`? `npm install -g @mquan/ora` first. No `ANTHROPIC_API_KEY`
+required — ora drives your existing local `claude` / `codex` login. Not on macOS? Run the daemon
+in the foreground with `ora daemon` instead of `install`. Full walkthrough, flags, and the web
 timeline: [docs/getting-started.md](docs/getting-started.md).
 
 ## Requirements
@@ -42,32 +42,32 @@ The daemon must be running for scheduled runs to fire and for ad-hoc runs to be 
 let the OS keep it alive across logout/login:
 
 ```bash
-gregorian install      # write + load a launchd LaunchAgent; the daemon starts now and at every login
-gregorian uninstall    # unload + remove it
+ora install      # write + load a launchd LaunchAgent; the daemon starts now and at every login
+ora uninstall    # unload + remove it
 ```
 
-`install` writes `~/Library/LaunchAgents/dev.gregorian.daemon.plist` (label `dev.gregorian.daemon`)
+`install` writes `~/Library/LaunchAgents/dev.ora.daemon.plist` (label `dev.ora.daemon`)
 with `RunAtLoad` + `KeepAlive`, pointing at the Node binary and CLI entry you ran it from, and bakes in
 your current `$PATH` so the daemon can find the `claude`/`codex` binaries it launches. Re-run `install`
 after changing your `$PATH` (or moving the install) to refresh it. Daemon logs go to
-`~/.gregorian/daemon.log`.
+`~/.ora/daemon.log`.
 
 **Linux / Windows — manual for v1** (no automated installer yet):
 
-- **Linux (systemd user service):** create `~/.config/systemd/user/gregorian.service` with
+- **Linux (systemd user service):** create `~/.config/systemd/user/ora.service` with
   `ExecStart=<path-to-node> <path-to>/dist/cli/index.js daemon`, then
-  `systemctl --user enable --now gregorian` (and `loginctl enable-linger $USER` to survive logout).
-- **Windows:** run `gregorian daemon` at login via Task Scheduler ("At log on" trigger) or a shortcut
+  `systemctl --user enable --now ora` (and `loginctl enable-linger $USER` to survive logout).
+- **Windows:** run `ora daemon` at login via Task Scheduler ("At log on" trigger) or a shortcut
   in the Startup folder.
 
-> gregorian needs Node `>=20 <23` — better-sqlite3 ships prebuilt binaries for that range, so `npx`
+> ora needs Node `>=20 <23` — better-sqlite3 ships prebuilt binaries for that range, so `npx`
 > never has to compile. On an unsupported Node the CLI prints a friendly message instead of a crash.
 
 ## Layout
 
 ```
 src/
-  cli/index.ts   # CLI entry (bin: gregorian)
+  cli/index.ts   # CLI entry (bin: ora)
   index.ts       # library entry
   types.ts       # shared types (filled in by later tasks)
   install/       # macOS launchd keep-alive + native-module first-run check

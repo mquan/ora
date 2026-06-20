@@ -1,16 +1,16 @@
 /**
  * The SPA's ONLY network layer. Two responsibilities:
  *
- * 1. Token (Jupyter model, reused from the web-api bootstrap contract): `gregorian ui` opens the page with
+ * 1. Token (Jupyter model, reused from the web-api bootstrap contract): `ora ui` opens the page with
  *    `?token=<token>` in the URL. We read it once, stash it in sessionStorage, and strip it from the address
  *    bar (so it can't linger in history or leak via Referer). Every request sends `Authorization: Bearer`.
  * 2. Typed, NAMED errors so the UI never fails silently. A non-2xx becomes an `ApiError` carrying the status
  *    and the daemon's message; an unreachable daemon becomes a `NetworkError`. Callers render these visibly.
  */
 
-import type { GregorianEvent, Run, CreateEventBody, TranscriptResult, EngineInfo } from "./types";
+import type { OraEvent, Run, CreateEventBody, TranscriptResult, EngineInfo } from "./types";
 
-const TOKEN_KEY = "gregorian.token";
+const TOKEN_KEY = "ora.token";
 
 /** Read the token from `?token=` (first load) or sessionStorage (subsequent navigations); null if neither. */
 export function resolveToken(): string | null {
@@ -25,7 +25,7 @@ export function resolveToken(): string | null {
   return sessionStorage.getItem(TOKEN_KEY);
 }
 
-/** A non-2xx response. `status` lets the UI special-case 401 (stale token → re-run `gregorian ui`). */
+/** A non-2xx response. `status` lets the UI special-case 401 (stale token → re-run `ora ui`). */
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -78,7 +78,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function listEvents(): Promise<{ events: GregorianEvent[] }> {
+export function listEvents(): Promise<{ events: OraEvent[] }> {
   return request("/events", { headers: authHeaders() });
 }
 
@@ -86,7 +86,7 @@ export function listRuns(): Promise<{ runs: Run[] }> {
   return request("/runs", { headers: authHeaders() });
 }
 
-export function getEvent(id: string): Promise<{ event: GregorianEvent; runs: Run[] }> {
+export function getEvent(id: string): Promise<{ event: OraEvent; runs: Run[] }> {
   return request(`/events/${encodeURIComponent(id)}`, { headers: authHeaders() });
 }
 
@@ -102,7 +102,7 @@ export function getEngines(): Promise<{ engines: EngineInfo[] }> {
   return request("/engines", { headers: authHeaders() });
 }
 
-export function createEvent(body: CreateEventBody): Promise<{ event: GregorianEvent }> {
+export function createEvent(body: CreateEventBody): Promise<{ event: OraEvent }> {
   return request("/events", {
     method: "POST",
     headers: authHeaders({ "content-type": "application/json" }),

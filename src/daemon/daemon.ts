@@ -1,8 +1,8 @@
 /**
- * The Daemon — gregorian's long-running local process and single DB writer.
+ * The Daemon — ora's long-running local process and single DB writer.
  *
  * `start()` opens the Store, builds the Scheduler, re-arms pending future events (croner is in-memory),
- * binds the loopback HTTP server, and publishes `~/.gregorian/daemon.json` so clients can connect.
+ * binds the loopback HTTP server, and publishes `~/.ora/daemon.json` so clients can connect.
  * `stop()` tears it all down in the safe order: stop the scheduler (so in-flight finalizers skip writes),
  * close the server, close the store, remove the connection file.
  *
@@ -41,16 +41,16 @@ import {
   type DaemonInfo,
 } from "./paths.js";
 
-/** Default loopback port; override via `GREGORIAN_PORT` or {@link DaemonOptions.port}. */
+/** Default loopback port; override via `ORA_PORT` or {@link DaemonOptions.port}. */
 export const DEFAULT_PORT = 4773;
 
 /** Default period between recurrence re-materialization ticks (rolling-window refresh). */
 export const DEFAULT_RECURRENCE_INTERVAL_MS = 60 * 60 * 1000;
 
-/** Thrown when the configured port is already bound — likely another gregorian daemon. */
+/** Thrown when the configured port is already bound — likely another ora daemon. */
 export class PortInUseError extends Error {
   constructor(port: number) {
-    super(`port ${port} is already in use — a gregorian daemon may already be running`);
+    super(`port ${port} is already in use — a ora daemon may already be running`);
     this.name = "PortInUseError";
   }
 }
@@ -58,7 +58,7 @@ export class PortInUseError extends Error {
 /** Thrown by the client helpers when no daemon is reachable. */
 export class DaemonNotRunningError extends Error {
   constructor() {
-    super("gregorian daemon is not running — start it with `gregorian daemon`");
+    super("ora daemon is not running — start it with `ora daemon`");
     this.name = "DaemonNotRunningError";
   }
 }
@@ -97,7 +97,7 @@ export class Daemon {
   private readonly recurrenceIntervalMs: number;
 
   constructor(opts: DaemonOptions = {}) {
-    this.port = opts.port ?? Number(process.env.GREGORIAN_PORT ?? DEFAULT_PORT);
+    this.port = opts.port ?? Number(process.env.ORA_PORT ?? DEFAULT_PORT);
     this.logger = opts.logger ?? consoleLogger;
     this.engineResolver = opts.engineResolver ?? defaultEngineResolver();
     this.engines = opts.engines ?? [new ClaudeEngine(), new CodexEngine()];

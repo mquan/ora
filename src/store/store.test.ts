@@ -20,7 +20,7 @@ let dbPath: string;
 let store: Store;
 
 beforeEach(() => {
-  dbPath = join(tmpdir(), `gregorian-test-${randomUUID()}.db`);
+  dbPath = join(tmpdir(), `ora-test-${randomUUID()}.db`);
   store = new Store(dbPath);
 });
 

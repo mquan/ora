@@ -1,5 +1,5 @@
 /**
- * `gregorian show <id>` — detail view for one event + its run(s) (R7).
+ * `ora show <id>` — detail view for one event + its run(s) (R7).
  *
  * Resolves <id> as a unique EVENT-id prefix (the `list` table shows the short id), fetches the event +
  * runs from the daemon (`GET /events/:id`), and renders: status, scheduled/started/ended times,
@@ -57,7 +57,7 @@ export function renderDetail(event: Event, runs: Run[]): string {
 export async function showCommand(args: string[]): Promise<number> {
   const idArg = args[0];
   if (!idArg) {
-    process.stderr.write("gregorian show: an event id (or unique prefix) is required\n");
+    process.stderr.write("ora show: an event id (or unique prefix) is required\n");
     return 1;
   }
 
@@ -66,7 +66,7 @@ export async function showCommand(args: string[]): Promise<number> {
     ({ events } = await daemonRequest<{ events: Event[] }>("/events"));
   } catch (err) {
     process.stderr.write(
-      `gregorian show: ${err instanceof DaemonNotRunningError ? err.message : (err as Error).message}\n`,
+      `ora show: ${err instanceof DaemonNotRunningError ? err.message : (err as Error).message}\n`,
     );
     return 1;
   }
@@ -77,11 +77,11 @@ export async function showCommand(args: string[]): Promise<number> {
   const resolved = exact ?? (matches.length === 1 ? matches[0] : undefined);
   if (!resolved) {
     if (matches.length === 0) {
-      process.stderr.write(`gregorian show: no event matching '${idArg}'\n`);
+      process.stderr.write(`ora show: no event matching '${idArg}'\n`);
     } else {
       const ids = matches.map((e) => shortId(e.id)).join(", ");
       process.stderr.write(
-        `gregorian show: '${idArg}' is ambiguous (${ids}) — use more characters\n`,
+        `ora show: '${idArg}' is ambiguous (${ids}) — use more characters\n`,
       );
     }
     return 1;
@@ -93,7 +93,7 @@ export async function showCommand(args: string[]): Promise<number> {
       `/events/${encodeURIComponent(resolved.id)}`,
     );
   } catch (err) {
-    process.stderr.write(`gregorian show: ${(err as Error).message}\n`);
+    process.stderr.write(`ora show: ${(err as Error).message}\n`);
     return 1;
   }
 

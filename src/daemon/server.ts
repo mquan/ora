@@ -14,7 +14,7 @@
  *
  * Security: bind `127.0.0.1` ONLY (the daemon's `listen` host, asserted in tests). Every JSON API route
  * but `/health` requires `Authorization: Bearer <token>`, compared in constant time. The static app code
- * carries NO secret — the browser receives the token via the URL `gregorian ui` opens, not via this HTML
+ * carries NO secret — the browser receives the token via the URL `ora ui` opens, not via this HTML
  * — so serving it unauthenticated is safe. POST bodies are capped (a runaway prompt can't exhaust daemon
  * memory). No silent failures — every error path returns a named error with a non-2xx status.
  */
@@ -253,7 +253,7 @@ async function handle(
   }
 
   // The web SPA + its assets are served unauthenticated for any GET that isn't a JSON API route — app
-  // code holds no secret. The browser gets the bearer token from the URL `gregorian ui` opens, not here.
+  // code holds no secret. The browser gets the bearer token from the URL `ora ui` opens, not here.
   if (method === "GET" && !isApiGet(pathname)) {
     serveStatic(req, res, assetsRoot, pathname);
     return;
@@ -301,7 +301,7 @@ async function handle(
     return;
   }
 
-  // Detail view for one event + its runs — powers `gregorian show` and the m5 web UI (same shape).
+  // Detail view for one event + its runs — powers `ora show` and the m5 web UI (same shape).
   if (method === "GET" && pathname.startsWith("/events/")) {
     const id = decodeURIComponent(pathname.slice("/events/".length));
     const event = store.getEvent(id);

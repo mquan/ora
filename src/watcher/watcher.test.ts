@@ -166,7 +166,7 @@ describe("launched run — recorded by sessionId (re-attach, no duplicate)", () 
   });
 });
 
-describe("ad-hoc discovery — a session gregorian never launched", () => {
+describe("ad-hoc discovery — a session ora never launched", () => {
   it("creates Event(adhoc,running)+Run(role=run) with cwd from the transcript, then finalizes done", () => {
     const sessionId = "adhoc-1";
     const { path, size } = writeTranscript(sessionId, { cwd: "/home/me/side-project" });

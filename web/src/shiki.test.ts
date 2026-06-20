@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeLang, toolPayload } from "./shiki";
 
 // Only the PURE helpers are unit-tested here. The actual highlighting + React rendering run in the
-// browser (vitest is the node env, no DOM) and are covered by the QA phase — matching the gregorian
+// browser (vitest is the node env, no DOM) and are covered by the QA phase — matching the ora
 // web convention. Importing this module does NOT pull shiki: `highlight()` dynamic-imports it lazily,
 // and these tests never call it.
 

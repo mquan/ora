@@ -1,5 +1,5 @@
 /**
- * The Claude engine adapter — gregorian's first concrete engine behind the frozen
+ * The Claude engine adapter — ora's first concrete engine behind the frozen
  * {@link AgentAdapterBase} contract (merged at f4311b2).
  *
  * It supplies ONLY the engine-specific seam: `id`, `buildSpawn` (claude flags + prompt/mentions
@@ -9,7 +9,7 @@
  * re-implemented here.
  *
  * The correctness spine is the JOIN KEY: `claude --session-id <uuid> -p` pre-assigns the session id,
- * which is also the transcript filename stem. So gregorian knows the on-disk path BEFORE the run
+ * which is also the transcript filename stem. So ora knows the on-disk path BEFORE the run
  * even starts, and the watcher (m2) re-attaches by it. The single failure-prone line is the
  * cwd-slug encoding in {@link slugForCwd} — empirically confirmed against `~/.claude/projects`,
  * exported, and unit-tested in isolation.

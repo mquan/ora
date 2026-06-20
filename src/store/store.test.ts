@@ -206,4 +206,30 @@ describe("pending launched-run correlation (codex)", () => {
     // No longer pending after correlation.
     expect(store.listPendingLaunchedRuns("codex")).toHaveLength(0);
   });
+
+  it("attachLaunchedRun defaults correlation to null and stamps 'ambiguous' when asked", () => {
+    const ev = store.createEvent(newEvent({ engine: "codex", cwd: "/work/x" }));
+    const clean = store.createRun(newRun(ev.id, { engine: "codex", session_id: pendingSession("c1") }));
+    const flagged = store.createRun(newRun(ev.id, { engine: "codex", session_id: pendingSession("c2") }));
+
+    expect(store.attachLaunchedRun(clean.id, "uuid-1", "/r1.jsonl", 10)?.correlation).toBeNull();
+    expect(store.attachLaunchedRun(flagged.id, "uuid-2", "/r2.jsonl", 20, "ambiguous")?.correlation).toBe(
+      "ambiguous",
+    );
+  });
+
+  it("markRunAmbiguous flags a still-pending row without backfilling its id or transcript", () => {
+    const ev = store.createEvent(newEvent({ engine: "codex", cwd: "/work/x" }));
+    const sentinel = pendingSession("sticky");
+    const run = store.createRun(newRun(ev.id, { engine: "codex", session_id: sentinel }));
+
+    store.markRunAmbiguous(run.id);
+
+    const after = store.getRun(run.id)!;
+    expect(after.correlation).toBe("ambiguous");
+    // Untouched otherwise — still pending, awaiting its own rollout to claim it.
+    expect(after.session_id).toBe(sentinel);
+    expect(after.transcript_path).toBeNull();
+    expect(store.listPendingLaunchedRuns("codex").map((r) => r.id)).toContain(run.id);
+  });
 });

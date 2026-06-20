@@ -14,6 +14,7 @@ import { parseAt } from "../../daemon/at.js";
 import { daemonRequest, DaemonNotRunningError } from "../../daemon/daemon.js";
 import type { AddEventRequest } from "../../daemon/server.js";
 import type { Event } from "../../types.js";
+import { ENGINE_IDS, isValidEngine, validateModelForEngine } from "../../engines/registry.js";
 
 interface AddFlags {
   engine?: string;
@@ -62,9 +63,13 @@ export async function addCommand(args: string[]): Promise<number> {
   }
 
   const engine = flags.engine;
-  if (engine !== "claude" && engine !== "codex") {
-    return fail("--engine is required and must be 'claude' or 'codex'");
+  if (!isValidEngine(engine)) {
+    return fail(`--engine is required and must be one of: ${ENGINE_IDS.join(", ")}`);
   }
+  // Engine-scoped model check (registry single source of truth): reject a cross-engine model id
+  // (e.g. `--engine codex --model opus`) before it reaches the daemon. Custom strings pass.
+  const modelCheck = validateModelForEngine(engine, flags.model ?? null);
+  if (!modelCheck.ok) return fail(modelCheck.reason);
   if (!flags.at) return fail("--at is required (e.g. '+1m' or an ISO time like 2026-06-14T12:00:00Z)");
   const hasPrompt = flags.prompt !== undefined && flags.prompt.trim().length > 0;
   if (!hasPrompt && flags.mentions.length === 0) {

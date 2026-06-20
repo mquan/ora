@@ -39,6 +39,12 @@ import {
 } from "./scheduler.js";
 import { serveStatic, webRoot } from "../web/static.js";
 import { readRunTranscript } from "../web/transcript.js";
+import {
+  ENGINE_IDS,
+  ENGINE_REGISTRY,
+  isValidEngine,
+  validateModelForEngine,
+} from "../engines/registry.js";
 
 /** The POST /events request body — the add contract shared with the CLI `add` command. */
 export interface AddEventRequest {
@@ -51,9 +57,6 @@ export interface AddEventRequest {
   prompt?: string | null;
   mentions?: string[] | null;
 }
-
-/** Engine kinds the API will persist (launchability is enforced later by the scheduler). */
-const VALID_ENGINES: readonly EngineKind[] = ["claude", "codex"];
 
 /** Cap on POST body size — bounds the only unbounded input. */
 const MAX_BODY_BYTES = 1_000_000;
@@ -136,9 +139,10 @@ function parseAddRequest(raw: string): AddEventRequest | { error: string } {
   if (!body || typeof body !== "object") return { error: "request body must be a JSON object" };
   const b = body as Record<string, unknown>;
 
-  if (typeof b.engine !== "string" || !VALID_ENGINES.includes(b.engine as EngineKind)) {
-    return { error: `engine must be one of: ${VALID_ENGINES.join(", ")}` };
+  if (!isValidEngine(b.engine)) {
+    return { error: `engine must be one of: ${ENGINE_IDS.join(", ")}` };
   }
+  const engine = b.engine;
   if (typeof b.cwd !== "string" || b.cwd.length === 0) return { error: "cwd is required" };
   if (typeof b.scheduled_at !== "string" || Number.isNaN(new Date(b.scheduled_at).getTime())) {
     return { error: "scheduled_at must be a valid ISO 8601 time" };
@@ -146,13 +150,18 @@ function parseAddRequest(raw: string): AddEventRequest | { error: string } {
   if (b.mentions != null && !Array.isArray(b.mentions)) {
     return { error: "mentions must be an array of strings when present" };
   }
+  // Engine-scoped model check: reject a model that belongs to a DIFFERENT engine (e.g. `opus` under
+  // codex). Unknown/custom strings pass through — there is no model API to allowlist against.
+  const model = typeof b.model === "string" ? b.model : null;
+  const modelCheck = validateModelForEngine(engine, model);
+  if (!modelCheck.ok) return { error: modelCheck.reason };
 
   return {
-    engine: b.engine as EngineKind,
+    engine,
     cwd: b.cwd,
     scheduled_at: b.scheduled_at,
     title: typeof b.title === "string" ? b.title : undefined,
-    model: typeof b.model === "string" ? b.model : null,
+    model,
     prompt: typeof b.prompt === "string" ? b.prompt : null,
     mentions: Array.isArray(b.mentions) ? (b.mentions as string[]) : null,
   };
@@ -232,6 +241,14 @@ async function handle(
   // Liveness probe is unauthenticated by design.
   if (pathname === "/health") {
     sendJson(res, 200, { status: "ok" });
+    return;
+  }
+
+  // Engine registry — the single source the web form reads to build its engine-scoped model pickers.
+  // Carries only static, curated data (no secret), so it is unauthenticated like /health and resolved
+  // before the static fallback would treat it as a missing asset.
+  if (method === "GET" && pathname === "/engines") {
+    sendJson(res, 200, { engines: ENGINE_REGISTRY });
     return;
   }
 

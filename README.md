@@ -5,16 +5,23 @@ A calendar your agents read AND write. Schedule and record local AI agent runs (
 ## Get started in 60 seconds
 
 ```bash
-npx @mquan/ora install                                            # macOS: start the recorder daemon + keep it alive at login
+npx @mquan/ora                                                    # launch it: starts the daemon, opens the timeline in your browser
+```
+
+That one command is the whole app — it ensures the recorder daemon is running and opens the web
+timeline. From there (or the CLI) you can schedule and inspect runs:
+
+```bash
 npx @mquan/ora add --engine claude --at +1m --prompt 'list files' # schedule a run one minute out
 npx @mquan/ora list                                               # watch it fire
 npx @mquan/ora show <id>                                          # read the auto-generated minutes
+npx @mquan/ora --help                                             # all commands and flags
 ```
 
 Prefer to type just `ora`? `npm install -g @mquan/ora` first. No `ANTHROPIC_API_KEY`
-required — ora drives your existing local `claude` / `codex` login. Not on macOS? Run the daemon
-in the foreground with `ora daemon` instead of `install`. Full walkthrough, flags, and the web
-timeline: [docs/getting-started.md](docs/getting-started.md).
+required — ora drives your existing local `claude` / `codex` login. To keep the daemon running
+across logout/login on macOS, see [Keep-alive](#keep-alive-run-the-daemon-at-login) below. Full
+walkthrough, flags, and the web timeline: [docs/getting-started.md](docs/getting-started.md).
 
 ## Requirements
 
@@ -25,10 +32,18 @@ timeline: [docs/getting-started.md](docs/getting-started.md).
 
 ```bash
 npm install        # install dependencies
+npm run dev        # run the daemon + web dev server together (one command)
 npm run build      # compile TypeScript to dist/
 npm test           # run the vitest suite
 npm run lint       # eslint
 ```
+
+`npm run dev` boots **both** processes with [`concurrently`](https://www.npmjs.com/package/concurrently):
+the daemon (`node dist/cli/index.js daemon`) and the Vite dev server for `web/`. `Ctrl-C` stops both.
+The Vite dev proxy auto-attaches the daemon's bearer token, so <http://localhost:5173> works with no
+manual `?token=`. (`predev` builds `dist/` and installs `web/` deps first; the daemon runs from
+`dist/`, so a backend change needs a `npm run dev` restart to pick up — backend hot-reload isn't wired
+yet.) To run the daemon alone, use `npm run cli daemon`.
 
 After building, the CLI is runnable:
 

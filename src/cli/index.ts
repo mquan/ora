@@ -7,6 +7,10 @@
  * long-lived server itself; `ui` ensures the daemon is up and opens the browser; `install`/`uninstall`
  * manage the macOS launchd keep-alive. Unknown input exits non-zero so failures are never silent.
  *
+ * Bare invocation (`ora` with no command) launches the UI — it routes through the same `ui` command, so
+ * `npx @mquan/ora` is a one-step "start the app". `--help`/`-h` still print usage. The no-args→ui mapping
+ * lives in the pure {@link resolveInvocation} so it is unit-tested without spawning a daemon or exiting.
+ *
  * Command modules are imported LAZILY (dynamic `import()` per case) for one load-bearing reason: the
  * better-sqlite3 native module is a static top-level import in the store, so a failed native build would
  * otherwise crash the entry at module-evaluation time with a raw stack trace — before any of our code
@@ -19,6 +23,7 @@ import { checkNativeModules } from "../install/native-check.js";
 const USAGE = `ora — a calendar your agents read AND write
 
 Usage:
+  ora                           Launch the timeline UI (no command needed — ensures the daemon, opens the browser)
   ora <command> [options]
 
 Commands:
@@ -45,18 +50,34 @@ Options:
 
 Schedule and record local AI agent runs (Claude Code, Codex) on one timeline.`;
 
-async function main(argv: string[]): Promise<number> {
-  const args = argv.slice(2);
-  const [cmd, ...rest] = args;
+/** A resolved CLI invocation: either "print help" or "run command `cmd` with `rest` args". */
+export type Invocation = { kind: "help" } | { kind: "command"; cmd: string; rest: string[] };
 
-  if (!cmd || cmd === "--help" || cmd === "-h") {
+/**
+ * Map raw `process.argv` to an {@link Invocation}. Pure (no I/O, no exit) so the dispatch decision — in
+ * particular "bare `ora` launches the UI" — is unit-testable. `--help`/`-h` ask for usage; everything else
+ * is a command, and a missing command defaults to `ui` (the bare-invocation launch path).
+ */
+export function resolveInvocation(argv: string[]): Invocation {
+  const [cmd, ...rest] = argv.slice(2);
+  if (cmd === "--help" || cmd === "-h") return { kind: "help" };
+  return { kind: "command", cmd: cmd ?? "ui", rest };
+}
+
+async function main(argv: string[]): Promise<number> {
+  const invocation = resolveInvocation(argv);
+
+  // Help is resolved BEFORE the native-module preflight so `ora --help` works even on a broken native build.
+  if (invocation.kind === "help") {
     process.stdout.write(USAGE + "\n");
     return 0;
   }
 
+  const { cmd, rest } = invocation;
+
   // First-run native-module preflight: if better-sqlite3 didn't load, print a friendly message and
   // exit rather than crashing inside a command with a raw ERR_DLOPEN_FAILED stack. Runs before any
-  // command module (which may statically import the store) is loaded below.
+  // command module (which may statically import the store) is loaded below — including the no-args→ui path.
   const native = checkNativeModules();
   if (!native.ok) {
     process.stderr.write(native.message + "\n");

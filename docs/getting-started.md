@@ -8,7 +8,17 @@ Schedule your first agent run and read its minutes — about 60 seconds end to e
 
 > **Install:** the examples below use the `ora` command. Get it with
 > `npm install -g @mquan/ora`, or prefix any command with `npx @mquan/ora` to run without
-> installing (e.g. `npx @mquan/ora install`).
+> installing (e.g. `npx @mquan/ora list`).
+
+## 0. The one-command launch
+
+```bash
+npx @mquan/ora
+```
+
+With no command, `ora` launches the app: it ensures the daemon is running and opens the web timeline in
+your browser. That's the fastest way in — the rest of this guide breaks down the same pieces (start the
+daemon, schedule a run, read the minutes) so you can drive them from the CLI too.
 
 ## 1. Start the daemon
 
@@ -58,7 +68,7 @@ You'll see the event move from scheduled to done (with an exit code) once the mi
 timeline view? Open the web UI:
 
 ```bash
-ora ui
+ora ui      # or just `ora` with no command — same thing
 ```
 
 This ensures the daemon is up and opens the week/month/agenda timeline in your browser.

@@ -25,7 +25,7 @@ walkthrough, flags, and the web timeline: [docs/getting-started.md](docs/getting
 
 ## Requirements
 
-- Node.js `>=20 <23` (better-sqlite3 prebuilt-binary coverage)
+- Node.js `20`, or `22`–`26` (better-sqlite3 prebuilt-binary coverage)
 - npm
 
 ## Develop
@@ -75,8 +75,8 @@ after changing your `$PATH` (or moving the install) to refresh it. Daemon logs g
 - **Windows:** run `ora daemon` at login via Task Scheduler ("At log on" trigger) or a shortcut
   in the Startup folder.
 
-> ora needs Node `>=20 <23` — better-sqlite3 ships prebuilt binaries for that range, so `npx`
-> never has to compile. On an unsupported Node the CLI prints a friendly message instead of a crash.
+> ora needs Node `20`, or `22`–`26` — better-sqlite3 ships prebuilt binaries for those versions,
+> so `npx` never has to compile. On an unsupported Node the CLI prints a friendly message instead of a crash.
 
 ## Layout
 

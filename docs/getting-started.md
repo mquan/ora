@@ -2,8 +2,8 @@
 
 Schedule your first agent run and read its minutes — about 60 seconds end to end.
 
-> **Requirements:** Node.js `>=20 <23` (better-sqlite3 ships prebuilt binaries for that range, so
-> `npx` never has to compile). No `ANTHROPIC_API_KEY` needed — ora launches your local
+> **Requirements:** Node.js `20`, or `22`–`26` (better-sqlite3 ships prebuilt binaries for those
+> versions, so `npx` never has to compile). No `ANTHROPIC_API_KEY` needed — ora launches your local
 > `claude` / `codex` binaries and reuses their existing login.
 
 > **Install:** the examples below use the `ora` command. Get it with

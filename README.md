@@ -25,7 +25,7 @@ walkthrough, flags, and the web timeline: [docs/getting-started.md](docs/getting
 
 ## Requirements
 
-- Node.js `>=20 <23` (better-sqlite3 prebuilt-binary coverage)
+- Node.js `20`, or `22`–`26` (better-sqlite3 prebuilt-binary coverage)
 - npm
 
 ## Develop
